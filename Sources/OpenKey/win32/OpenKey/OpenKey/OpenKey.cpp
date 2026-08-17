@@ -232,31 +232,62 @@ static inline void prepareUnicodeEvent(INPUT& input, const Uint16& unicode, cons
 	input.ki.dwExtraInfo = 1;
 }
 
-static void SendCombineKey(const Uint16& key1, const Uint16& key2, const DWORD& flagKey1=0, const DWORD& flagKey2 = 0) {
-	INPUT events[4];
-	prepareKeyEvent(events[0], key1, true, flagKey1);
-	prepareKeyEvent(events[1], key2, true, flagKey2);
-	prepareKeyEvent(events[2], key2, false, flagKey2);
-	prepareKeyEvent(events[3], key1, false, flagKey1);
-	SendInput(4, events, sizeof(INPUT));
+static vector<INPUT> _batchInputEvents;
+
+static inline void pushKeyEvent(const Uint16& keycode, const bool& isPress, const DWORD& flag=0) {
+	INPUT input;
+	input.type = INPUT_KEYBOARD;
+	input.ki.dwFlags = isPress ? flag : flag|KEYEVENTF_KEYUP;
+	input.ki.wVk = keycode;
+	input.ki.wScan = 0;
+	input.ki.time = 0;
+	input.ki.dwExtraInfo = 1;
+	_batchInputEvents.push_back(input);
 }
 
-static void SendKeyCode(Uint32 data) {
+static inline void pushUnicodeEvent(const Uint16& unicode, const bool& isPress) {
+	INPUT input;
+	input.type = INPUT_KEYBOARD;
+	input.ki.wVk = 0;
+	input.ki.wScan = unicode;
+	input.ki.time = 0;
+	input.ki.dwFlags = (isPress ? 0 : KEYEVENTF_KEYUP) | KEYEVENTF_UNICODE;
+	input.ki.dwExtraInfo = 1;
+	_batchInputEvents.push_back(input);
+}
+
+static void FlushBatchInput() {
+	if (!_batchInputEvents.empty()) {
+		SendInput((UINT)_batchInputEvents.size(), _batchInputEvents.data(), sizeof(INPUT));
+		_batchInputEvents.clear();
+	}
+}
+
+static void SendCombineKey(const Uint16& key1, const Uint16& key2, const DWORD& flagKey1=0, const DWORD& flagKey2 = 0) {
+	prepareKeyEvent(keyEvent[0], key1, true, flagKey1);
+	SendInput(1, keyEvent, sizeof(INPUT));
+
+	prepareKeyEvent(keyEvent[0], key2, true, flagKey2);
+	prepareKeyEvent(keyEvent[1], key2, false, flagKey2);
+	SendInput(2, keyEvent, sizeof(INPUT));
+
+	prepareKeyEvent(keyEvent[0], key1, false, flagKey1);
+	SendInput(1, keyEvent, sizeof(INPUT));
+}
+
+static void QueueKeyCode(Uint32 data) {
 	if (data & PURE_CHARACTER_MASK) {
 		Uint32 pureChar = data & ~PURE_CHARACTER_MASK;
 		if (pureChar <= 0xFFFF) {
-			prepareUnicodeEvent(keyEvent[0], (Uint16)pureChar, true);
-			prepareUnicodeEvent(keyEvent[1], (Uint16)pureChar, false);
-			SendInput(2, keyEvent, sizeof(INPUT));
+			pushUnicodeEvent((Uint16)pureChar, true);
+			pushUnicodeEvent((Uint16)pureChar, false);
 		} else {
 			Uint16 high = (Uint16)(((pureChar - 0x10000) >> 10) + 0xD800);
 			Uint16 low = (Uint16)(((pureChar - 0x10000) & 0x3FF) + 0xDC00);
-			INPUT events[4];
-			prepareUnicodeEvent(events[0], high, true);
-			prepareUnicodeEvent(events[1], high, false);
-			prepareUnicodeEvent(events[2], low, true);
-			prepareUnicodeEvent(events[3], low, false);
-			SendInput(4, events, sizeof(INPUT));
+			pushUnicodeEvent(high, true);
+			pushUnicodeEvent(high, false);
+			pushUnicodeEvent(low, true);
+			pushUnicodeEvent(low, false);
 		}
 		return;
 	}
@@ -268,33 +299,28 @@ static void SendKeyCode(Uint32 data) {
 		_newChar = keyCodeToCharacter(data);
 		if (_newChar == 0) {
 			_newChar = (Uint16)data;
-			prepareKeyEvent(keyEvent[0], _newChar, true);
-			prepareKeyEvent(keyEvent[1], _newChar, false);
-			SendInput(2, keyEvent, sizeof(INPUT));
+			pushKeyEvent(_newChar, true);
+			pushKeyEvent(_newChar, false);
 		} else {
-			prepareUnicodeEvent(keyEvent[0], _newChar, true);
-			prepareUnicodeEvent(keyEvent[1], _newChar, false);
-			SendInput(2, keyEvent, sizeof(INPUT));
+			pushUnicodeEvent(_newChar, true);
+			pushUnicodeEvent(_newChar, false);
 		}
 	} else {
 		if (vCodeTable == 0) { //unicode 2 bytes code
-			prepareUnicodeEvent(keyEvent[0], _newChar, true);
-			prepareUnicodeEvent(keyEvent[1], _newChar, false);
-			SendInput(2, keyEvent, sizeof(INPUT));
+			pushUnicodeEvent(_newChar, true);
+			pushUnicodeEvent(_newChar, false);
 		} else if (vCodeTable == 1 || vCodeTable == 2 || vCodeTable == 4) { //others such as VNI Windows, TCVN3: 1 byte code
 			_newCharHi = HIBYTE(_newChar);
 			_newChar = LOBYTE(_newChar);
 
-			prepareUnicodeEvent(keyEvent[0], _newChar, true);
-			prepareUnicodeEvent(keyEvent[1], _newChar, false);
-			SendInput(2, keyEvent, sizeof(INPUT));
+			pushUnicodeEvent(_newChar, true);
+			pushUnicodeEvent(_newChar, false);
 
 			if (_newCharHi > 32) {
 				if (vCodeTable == 2) //VNI
 					InsertKeyLength(2);
-				prepareUnicodeEvent(keyEvent[0], _newCharHi, true);
-				prepareUnicodeEvent(keyEvent[1], _newCharHi, false);
-				SendInput(2, keyEvent, sizeof(INPUT));
+				pushUnicodeEvent(_newCharHi, true);
+				pushUnicodeEvent(_newCharHi, false);
 			} else {
 				if (vCodeTable == 2) //VNI
 					InsertKeyLength(1);
@@ -305,36 +331,39 @@ static void SendKeyCode(Uint32 data) {
 			_uniChar[0] = _newChar;
 			_uniChar[1] = _newCharHi > 0 ? (_unicodeCompoundMark[_newCharHi - 1]) : 0;
 			InsertKeyLength(_newCharHi > 0 ? 2 : 1);
-			prepareUnicodeEvent(keyEvent[0], _uniChar[0], true);
-			prepareUnicodeEvent(keyEvent[1], _uniChar[0], false);
-			SendInput(2, keyEvent, sizeof(INPUT));
+			pushUnicodeEvent(_uniChar[0], true);
+			pushUnicodeEvent(_uniChar[0], false);
 			if (_newCharHi > 0) {
-				prepareUnicodeEvent(keyEvent[0], _uniChar[1], true);
-				prepareUnicodeEvent(keyEvent[1], _uniChar[1], false);
-				SendInput(2, keyEvent, sizeof(INPUT));
+				pushUnicodeEvent(_uniChar[1], true);
+				pushUnicodeEvent(_uniChar[1], false);
 			}
 		}
 	}
 }
 
+static void SendKeyCode(Uint32 data) {
+	QueueKeyCode(data);
+	FlushBatchInput();
+}
+
+static void QueueBackspace() {
+	pushKeyEvent(VK_BACK, true);
+	pushKeyEvent(VK_BACK, false);
+	if (IS_DOUBLE_CODE(vCodeTable) && !_syncKey.empty()) { //VNI or Unicode Compound
+		if (_syncKey.back() > 1) {
+			pushKeyEvent(VK_BACK, true);
+			pushKeyEvent(VK_BACK, false);
+		}
+		_syncKey.pop_back();
+	}
+}
+
 static void SendBackspace() {
-	SendInput(2, backspaceEvent, sizeof(INPUT));
+	QueueBackspace();
+	FlushBatchInput();
 	if (vSupportMetroApp && OpenKeyHelper::getLastAppExecuteName().compare("ApplicationFrameHost.exe") == 0) {//Metro App
 		SendMessage(HWND_BROADCAST, WM_CHAR, VK_BACK, 0L);
 		SendMessage(HWND_BROADCAST, WM_CHAR, VK_BACK, 0L);
-	}
-	if (IS_DOUBLE_CODE(vCodeTable) && !_syncKey.empty()) { //VNI or Unicode Compound
-		if (_syncKey.back() > 1) {
-			/*if (!(vCodeTable == 3 && containUnicodeCompoundApp(FRONT_APP))) {
-				SendInput(2, backspaceEvent, sizeof(INPUT));
-			}*/
-			SendInput(2, backspaceEvent, sizeof(INPUT));
-			if (vSupportMetroApp && OpenKeyHelper::getLastAppExecuteName().compare("ApplicationFrameHost.exe") == 0) {//Metro App
-				SendMessage(HWND_BROADCAST, WM_CHAR, VK_BACK, 0L);
-				SendMessage(HWND_BROADCAST, WM_CHAR, VK_BACK, 0L);
-			}
-		}
-		_syncKey.pop_back();
 	}
 }
 
@@ -651,9 +680,11 @@ LRESULT CALLBACK keyboardHookProcess(int nCode, WPARAM wParam, LPARAM lParam) {
 	//ignore if IME pad is open when typing Japanese/Chinese...
 	HWND hWnd = GetForegroundWindow();
 	HWND hIME = ImmGetDefaultIMEWnd(hWnd);
-	LRESULT isImeON = SendMessage(hIME, WM_IME_CONTROL, IMC_GETOPENSTATUS, 0);
-	if (isImeON) {
-		return CallNextHookEx(hKeyboardHook, nCode, wParam, lParam);
+	if (hIME) {
+		LRESULT isImeON = SendMessage(hIME, WM_IME_CONTROL, IMC_GETOPENSTATUS, 0);
+		if (isImeON) {
+			return CallNextHookEx(hKeyboardHook, nCode, wParam, lParam);
+		}
 	}
 	
 	static Uint16 _lastDoubleModKey = 0;
@@ -827,22 +858,24 @@ LRESULT CALLBACK keyboardHookProcess(int nCode, WPARAM wParam, LPARAM lParam) {
 			//send backspace
 			if (pData->backspaceCount > 0 && pData->backspaceCount < MAX_BUFF) {
 				for (_i = 0; _i < pData->backspaceCount; _i++) {
-					SendBackspace();
+					QueueBackspace();
 				}
 			}
 
 			//send new character
 			if (!vSendKeyStepByStep) {
+				FlushBatchInput();
 				SendNewCharString();
 			} else {
 				if (pData->newCharCount > 0 && pData->newCharCount <= MAX_BUFF) {
 					for (int i = pData->newCharCount - 1; i >= 0; i--) {
-						SendKeyCode(pData->charData[i]);
+						QueueKeyCode(pData->charData[i]);
 					}
 				}
 				if (pData->code == vRestore || pData->code == vRestoreAndStartNewSession) {
-					SendKeyCode(_keycode | ((_flag & MASK_CAPITAL) || (_flag & MASK_SHIFT) ? CAPS_MASK : 0));
+					QueueKeyCode(_keycode | ((_flag & MASK_CAPITAL) || (_flag & MASK_SHIFT) ? CAPS_MASK : 0));
 				}
+				FlushBatchInput();
 				if (pData->code == vRestoreAndStartNewSession) {
 					startNewSession();
 				}
@@ -885,6 +918,14 @@ LRESULT CALLBACK mouseHookProcess(int nCode, WPARAM wParam, LPARAM lParam) {
 }
 
 VOID CALLBACK winEventProcCallback(HWINEVENTHOOK hWinEventHook, DWORD dwEvent, HWND hwnd, LONG idObject, LONG idChild, DWORD dwEventThread, DWORD dwmsEventTime) {
+	// resync modifier flags from actual key state to avoid stale _flag after alt-tabbing from fullscreen games
+	_flag = 0;
+	if (GetKeyState(VK_LSHIFT) < 0 || GetKeyState(VK_RSHIFT) < 0) _flag |= MASK_SHIFT;
+	if (GetKeyState(VK_LCONTROL) < 0 || GetKeyState(VK_RCONTROL) < 0) _flag |= MASK_CONTROL;
+	if (GetKeyState(VK_LMENU) < 0 || GetKeyState(VK_RMENU) < 0) _flag |= MASK_ALT;
+	if (GetKeyState(VK_LWIN) < 0 || GetKeyState(VK_RWIN) < 0) _flag |= MASK_WIN;
+	if (GetKeyState(VK_CAPITAL) == 1) _flag |= MASK_CAPITAL;
+	_lastFlag = 0;
 	//smart switch key
 	if (vUseSmartSwitchKey || vRememberCode) {
 		string& exe = OpenKeyHelper::getFrontMostAppExecuteName();
