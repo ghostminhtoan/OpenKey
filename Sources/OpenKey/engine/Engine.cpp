@@ -200,8 +200,6 @@ static bool isMacroTriggerKey(const Uint16& data) {
     if ((data == KEY_RETURN || data == KEY_ENTER) && (vMacroTriggerMask & 0x02)) return true;
     if (data == VK_LSHIFT && (vMacroTriggerMask & 0x04)) return true;
     if (data == VK_RSHIFT && (vMacroTriggerMask & 0x08)) return true;
-    if (data == VK_LCONTROL && (vMacroTriggerMask & 0x10)) return true;
-    if (data == VK_RCONTROL && (vMacroTriggerMask & 0x20)) return true;
     return false;
 }
 
@@ -293,11 +291,11 @@ bool getTBTStandaloneRawKey(const Uint32& value, Uint16& rawKey) {
         rawKey = KEY_9;
         return true;
     }
-    if (key == KEY_O && mark == TONEW_MASK) {
+    if (key == KEY_U && mark == TONEW_MASK) {
         rawKey = KEY_LEFT_BRACKET;
         return true;
     }
-    if (key == KEY_U && mark == TONEW_MASK) {
+    if (key == KEY_O && mark == TONEW_MASK) {
         rawKey = KEY_RIGHT_BRACKET;
         return true;
     }
@@ -319,10 +317,10 @@ bool getTBTStandaloneValue(const Uint16& data, Uint32& value) {
             value = KEY_A | TONEW_MASK;
             return true;
         case KEY_LEFT_BRACKET:
-            value = KEY_O | TONEW_MASK;
+            value = KEY_U | TONEW_MASK;
             return true;
         case KEY_RIGHT_BRACKET:
-            value = KEY_U | TONEW_MASK;
+            value = KEY_O | TONEW_MASK;
             return true;
         default:
             return false;
@@ -330,8 +328,13 @@ bool getTBTStandaloneValue(const Uint16& data, Uint32& value) {
 }
 
 bool canApplyTBTStandaloneInVowel(const Uint16& data) {
+    if (_index == 0)
+        return false;
+    // Allow 'ơ' + '[' -> 'ươ'
+    if (data == KEY_LEFT_BRACKET && CHR(_index - 1) == KEY_O && (TypingWord[_index - 1] & TONEW_MASK))
+        return true;
     Uint32 target;
-    if (!getTBTStandaloneValue(data, target) || _index == 0)
+    if (!getTBTStandaloneValue(data, target))
         return false;
 
     vector<Uint32> seq;
@@ -469,8 +472,8 @@ void checkSpelling(const bool& forceCheckVowel=false) {
             k = k + 1;
             j = k;
             VSI = k;
-        } else if (_index >= 2 && CHR(0) == KEY_G && CHR(1) == KEY_I && isSpellingConsonant(CHR(2))) {
-            VSI = k = j = 1; //Sep 28th: fix gìn
+        } else if (_index >= 2 && CHR(0) == KEY_G && CHR(1) == KEY_I && (_spellingEndIndex == 2 || isSpellingConsonant(CHR(2)))) {
+            VSI = k = j = 1; // fix 'gì', 'gìn'
         }
         for (l = 0; l < 3; l++) {
             if (k < _spellingEndIndex && !isSpellingConsonant(CHR(k))) {
@@ -825,7 +828,7 @@ void findAndCalculateVowel(const bool& forGrammar) {
             if (vowelCount == 0)
                 VEI = iii;
             if (!forGrammar) {
-                if ((iii-1 >= 0 && (CHR(iii) == KEY_I && CHR(iii-1) == KEY_G)) ||
+                if ((iii-1 >= 0 && (CHR(iii) == KEY_I && CHR(iii-1) == KEY_G) && iii < _index - 1) ||
                     (iii-1 >= 0 && (CHR(iii) == KEY_U && CHR(iii-1) == KEY_Q))) {
                     break;
                 }
@@ -1320,11 +1323,26 @@ void checkForStandaloneCharTBT(const Uint16& data, const bool& isCaps, const Uin
         saveWord();
         return;
     }
-    // Transform 'uo' to 'ươ' when typing [ or ] or 9 after 'uo'
+    // Handle 'ơ' + '[' -> auto correct 'ơư' to 'ươ'
+    if (data == KEY_LEFT_BRACKET && _index > 0 && CHR(_index - 1) == KEY_O && (TypingWord[_index - 1] & TONEW_MASK)) {
+        Uint32 prevCaps = TypingWord[_index - 1] & CAPS_MASK;
+        TypingWord[_index - 1] = KEY_U | TONEW_MASK | prevCaps;
+        TypingWord[_index] = KEY_O | TONEW_MASK | (isCaps ? CAPS_MASK : 0);
+        _index++;
+        hCode = vWillProcess;
+        hBPC = 1;
+        hNCC = 2;
+        hExt = 4;
+        hData[1] = GET(TypingWord[_index - 2]);
+        hData[0] = GET(TypingWord[_index - 1]);
+        saveWord();
+        return;
+    }
+    // Transform 'uo' to 'ươ' when typing [ or ] after 'uo'
     if (_index >= 2 && CHR(_index - 2) == KEY_U && CHR(_index - 1) == KEY_O &&
         !(TypingWord[_index - 2] & (TONE_MASK | TONEW_MASK)) &&
         !(TypingWord[_index - 1] & (TONE_MASK | TONEW_MASK)) &&
-        (data == KEY_LEFT_BRACKET || data == KEY_RIGHT_BRACKET || data == KEY_9)) {
+        (data == KEY_LEFT_BRACKET || data == KEY_RIGHT_BRACKET)) {
         TypingWord[_index - 2] |= TONEW_MASK;
         TypingWord[_index - 1] |= TONEW_MASK;
         hCode = vWillProcess;
@@ -1336,8 +1354,10 @@ void checkForStandaloneCharTBT(const Uint16& data, const bool& isCaps, const Uin
         saveWord();
         return;
     }
-    // Transform base vowel if typed after base vowel: a+6->â, e+7->ê, o+8->ô, a+9->ă, o+[->ơ, u+]->ư
-    if (_index > 0 && CHR(_index - 1) == keyWillReverse && !(TypingWord[_index - 1] & (TONE_MASK | TONEW_MASK))) {
+    // Transform base vowel: a+6→â, e+7→ê, o+8→ô, a+9→ă — chỉ giữ lại cho [ ] (ơ, ư)
+    // Phím 6/7/8/9 luôn output standalone (đặc điểm Tư Bình Trần)
+    if ((data == KEY_LEFT_BRACKET || data == KEY_RIGHT_BRACKET) &&
+        _index > 0 && CHR(_index - 1) == keyWillReverse && !(TypingWord[_index - 1] & (TONE_MASK | TONEW_MASK))) {
         TypingWord[_index - 1] |= maskToAdd;
         hCode = vWillProcess;
         hBPC = 1;
@@ -1537,9 +1557,9 @@ void handleMainKey(const Uint16& data, const bool& isCaps) {
         }
     }
     
-    if (data == KEY_LEFT_BRACKET) { //standalone key [
+    if (data == KEY_LEFT_BRACKET) { //standalone key [ -> ư (TBT)
         if (vInputType == vTuBinhTranDonGian) {
-            checkForStandaloneCharTBT(data, isCaps, KEY_O, TONEW_MASK);
+            checkForStandaloneCharTBT(data, isCaps, KEY_U, TONEW_MASK);
             return;
         }
         if (shouldKeepTBTStandaloneKeyRaw(data) && restoreTBTStandaloneThenInsertRaw(data, isCaps))
@@ -1548,9 +1568,9 @@ void handleMainKey(const Uint16& data, const bool& isCaps) {
         return;
     }
     
-    if (data == KEY_RIGHT_BRACKET) { //standalone key ]
+    if (data == KEY_RIGHT_BRACKET) { //standalone key ] -> ơ (TBT)
         if (vInputType == vTuBinhTranDonGian) {
-            checkForStandaloneCharTBT(data, isCaps, KEY_U, TONEW_MASK);
+            checkForStandaloneCharTBT(data, isCaps, KEY_O, TONEW_MASK);
             return;
         }
         if (shouldKeepTBTStandaloneKeyRaw(data) && restoreTBTStandaloneThenInsertRaw(data, isCaps))
@@ -1638,6 +1658,13 @@ void handleMainKey(const Uint16& data, const bool& isCaps) {
         }
     }
     
+    if (vInputType == vTuBinhTranDonGian) {
+        if (data != KEY_6 && data != KEY_7 && data != KEY_8 && data != KEY_9) {
+            insertKey(data, isCaps);
+            return;
+        }
+    }
+    
     keyForAEO = (vInputType == vTuBinhTranDonGian) ? 
                     (data == KEY_6 ? KEY_A : 
                      (data == KEY_7 ? KEY_E : 
@@ -1678,7 +1705,7 @@ void handleMainKey(const Uint16& data, const bool& isCaps) {
     }
     
     if (!isChanged) {
-        if (data == KEY_W && vInputType != vSimpleTelex1) {
+        if (data == KEY_W && vInputType != vSimpleTelex1 && vInputType != vTuBinhTranDonGian && vInputType != vTuDinhNghia) {
             checkForStandaloneChar(data, isCaps, KEY_U);
         } else {
             insertKey(data, isCaps);
@@ -1726,6 +1753,10 @@ void vSetCheckSpelling() {
 
 void vTempOffEngine(const bool& off) {
     _willTempOffEngine = off;
+}
+
+void vClearMacroKey() {
+    hMacroKey.clear();
 }
 
 bool checkQuickConsonant() {
@@ -1778,13 +1809,16 @@ bool checkQuickConsonant() {
 void vEnglishMode(const vKeyEventState& state, const Uint16& data, const bool& isCaps, const bool& otherControlKey) {
     hCode = vDoNothing;
     hExt = 0;
-    if (state == vKeyEventState::MouseDown || (otherControlKey && !isCaps)) {
+    bool isCtrlKey = (data == VK_LCONTROL || data == VK_RCONTROL || data == VK_CONTROL);
+    bool hasCtrlModifier = otherControlKey || isCtrlKey;
+
+    if (state == vKeyEventState::MouseDown || (hasCtrlModifier && !isCaps)) {
         hMacroKey.clear();
         _willTempOffEngine = false;
     } else if (data == KEY_SPACE || data == KEY_RETURN || data == KEY_ENTER || data == VK_LSHIFT || data == VK_RSHIFT || data == VK_LCONTROL || data == VK_RCONTROL || isMacroPunctuationTriggerKey(data, isCaps ? 1 : 0)) {
         Byte macroBackspace = 0;
         bool isPunctTrigger = isMacroPunctuationTriggerKey(data, isCaps ? 1 : 0);
-        if ((isMacroTriggerKey(data) || isPunctTrigger) && !_hasHandledMacro && findMacroMatch(hMacroKey, hMacroData, macroBackspace)) {
+        if (!hasCtrlModifier && (isMacroTriggerKey(data) || isPunctTrigger) && !_hasHandledMacro && findMacroMatch(hMacroKey, hMacroData, macroBackspace)) {
             hCode = vReplaceMaro;
             hBPC = macroBackspace;
             hExt = (data == KEY_SPACE ? 6 : (isPunctTrigger ? 7 : 5));
@@ -1854,6 +1888,8 @@ void vKeyHandleEvent(const vKeyEvent& event,
     }
     bool isNumberBreak = ((IS_NUMBER_KEY(data) && capsStatus == 1) || isTBTNumberBreak) && !isTBTOrCustomNumberAction;
     bool isNumberAtStartBreak = (_index == 0 && IS_NUMBER_KEY(data)) && !isTBTOrCustomNumberAction;
+    bool isCtrlKey = (data == VK_LCONTROL || data == VK_RCONTROL || data == VK_CONTROL);
+    bool hasCtrlModifier = otherControlKey || isCtrlKey;
 
     if (isNumberBreak
         || otherControlKey || isWordBreak(event, state, data) || isNumberAtStartBreak || isTriggerModifier) {
@@ -1864,7 +1900,7 @@ void vKeyHandleEvent(const vKeyEvent& event,
         
         //check macro feature
         bool isPunctTrigger = isMacroPunctuationTriggerKey(data, capsStatus);
-        if (vUseMacro && (isMacroTriggerKey(data) || isPunctTrigger) && !_hasHandledMacro) {
+        if (vUseMacro && !hasCtrlModifier && (isMacroTriggerKey(data) || isPunctTrigger) && !_hasHandledMacro) {
             Byte macroBackspace = 0;
             if (findMacroMatch(hMacroKey, hMacroData, macroBackspace)) {
                 hCode = vReplaceMaro;
@@ -1872,6 +1908,8 @@ void vKeyHandleEvent(const vKeyEvent& event,
                 hExt = (data == KEY_SPACE ? 6 : (isPunctTrigger ? 7 : 5));
                 _hasHandledMacro = true;
             }
+        } else if (hasCtrlModifier) {
+            hMacroKey.clear();
         } else if ((vQuickStartConsonant || vQuickEndConsonant) && !tempDisableKey && isMacroBreakCode(data)) {
             checkQuickConsonant();
         } else if (vRestoreIfWrongSpelling && _index > 0 && isWordBreak(event, state, data)) { //restore key if wrong spelling with break-key
@@ -1905,9 +1943,9 @@ void vKeyHandleEvent(const vKeyEvent& event,
         
         if (hCode == vDoNothing) {
             vector<Uint32> _savedMacroKey;
-            if (vUseMacro && _isCharKeyCode) _savedMacroKey = hMacroKey;
+            if (vUseMacro && _isCharKeyCode && !hasCtrlModifier) _savedMacroKey = hMacroKey;
             startNewSession();
-            if (vUseMacro && _isCharKeyCode) hMacroKey = move(_savedMacroKey);
+            if (vUseMacro && _isCharKeyCode && !hasCtrlModifier) hMacroKey = move(_savedMacroKey);
             vCheckSpelling = _useSpellCheckingBefore;
             _willTempOffEngine = false;
         } else if (hCode == vReplaceMaro || _hasHandleQuickConsonant) {
@@ -2096,8 +2134,8 @@ void vKeyHandleEvent(const vKeyEvent& event,
             }
         }
         bool isTBTStandalone = (vInputType == vTuBinhTranDonGian) && IS_TBT_STANDALONE_KEY(data) && !shouldKeepTBTStandaloneKeyRaw(data) && !canTBTStandaloneStartVowel(TypingWord[_index - 1]);
-        if ((IS_BRACKET_KEY(data) && (( IS_BRACKET_KEY( (((Uint16)hData[0] & ~CAPS_MASK)) )) || vInputType == vSimpleTelex1 || vInputType == vSimpleTelex2)) ||
-            ((isTBTStandalone || isCustomStandalone) && ((((Uint16)hData[0] & ~CAPS_MASK)) == data))) {
+        if (vInputType != vTuBinhTranDonGian && vInputType != vTuDinhNghia &&
+            IS_BRACKET_KEY(data) && (( IS_BRACKET_KEY( (((Uint16)hData[0] & ~CAPS_MASK)) )) || vInputType == vSimpleTelex1 || vInputType == vSimpleTelex2)) {
             if (_index - (hCode == vWillProcess ? hBPC : 0) > 0) {
                 _index--;
                 saveWord();

@@ -630,7 +630,7 @@ static void handleMacro() {
 
 	if (pData->extCode == 6) {
 		SendKeyCode(KEY_SPACE);
-	} else if (pData->extCode != 5 && pData->extCode != 7) {
+	} else if (pData->extCode != 5 && pData->extCode != 7 && _keycode != VK_LSHIFT && _keycode != VK_RSHIFT) {
 		SendKeyCode(_keycode | (_flag & MASK_SHIFT ? CAPS_MASK : 0));
 	}
 }
@@ -884,7 +884,7 @@ LRESULT CALLBACK keyboardHookProcess(int nCode, WPARAM wParam, LPARAM lParam) {
 			Uint8 savedExt = pData->extCode;
 			handleMacro();
 			startNewSession();
-			if (savedExt == 7) {
+			if (savedExt == 7 || isTriggerModifier) {
 				return CallNextHookEx(hKeyboardHook, nCode, wParam, lParam);
 			}
 		}
