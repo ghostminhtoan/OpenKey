@@ -553,7 +553,8 @@ void switchLanguage() {
 	else
 		vLanguage = 0;
 	if (HAS_BEEP(vSwitchKeyStatus)) {
-		Beep(vLanguage ? 1000 : 400, 100);
+		Beep(vLanguage ? 1000 : 400, 80);
+		Beep(vLanguage ? 1400 : 300, 80);
 	}
 	AppDelegate::getInstance()->onInputMethodChangedFromHotKey();
 	if (vUseSmartSwitchKey) {

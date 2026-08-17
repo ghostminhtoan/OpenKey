@@ -401,12 +401,6 @@ bool restoreTBTStandaloneThenInsertRaw(const Uint16& data, const bool& isCaps) {
     hBPC = 1;
     hExt = 3;
     TypingWord[_index - 1] = previousRawKey | (TypingWord[_index - 1] & CAPS_MASK);
-    if (previousRawKey == data) {
-        hNCC = 1;
-        hData[0] = TypingWord[_index - 1];
-        saveWord();
-        return true;
-    }
 
     hNCC = 2;
     hData[1] = TypingWord[_index - 1];
@@ -1338,17 +1332,6 @@ void checkForStandaloneCharTBT(const Uint16& data, const bool& isCaps, const Uin
     }
 
     if (shouldKeepTBTStandaloneKeyRaw(data) && restoreTBTStandaloneThenInsertRaw(data, isCaps)) {
-        return;
-    }
-
-    if (_index > 0 && CHR(_index - 1) == keyWillReverse && (TypingWord[_index - 1] & maskToAdd) && (TypingWord[_index - 1] & STANDALONE_MASK)) {
-        hCode = vWillProcess;
-        hBPC = 1;
-        hNCC = 1;
-        hExt = 4;
-        TypingWord[_index - 1] = data | (isCaps ? CAPS_MASK : 0); // No STANDALONE_MASK
-        hData[0] = GET(TypingWord[_index - 1]);
-        saveWord();
         return;
     }
     // Transform 'uo' to 'ươ' when typing [ or ] after 'uo'
