@@ -52,6 +52,8 @@ extern int vLanguage;
  * 1: VNI
  */
 extern int vInputType;
+extern vector<CustomRule> customRules;
+bool isSpecialKeyCustom(Uint16 keyCode);
 
 /**
  * 0: No
@@ -113,6 +115,8 @@ extern int vFixRecommendBrowser;
  */
 extern int vUseMacro;
 
+extern int vMacroTriggerMask;
+
 /**
  * Still use macro if you are in english mode
  */
@@ -152,6 +156,13 @@ extern int vTempOffSpelling;
  * 1: Yes
  */
 extern int vAllowConsonantZFWJ;
+
+/**
+ * Block \ and | key when typing Telex or Tu Binh Tran
+ * 0: No
+ * 1: Yes
+ */
+extern int vBlockBackslash;
 
 /**
  * 0: No; 1: Yes

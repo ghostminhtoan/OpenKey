@@ -1,4 +1,4 @@
-﻿/*----------------------------------------------------------
+/*----------------------------------------------------------
 OpenKey - The Cross platform Open source Vietnamese Keyboard application.
 
 Copyright (C) 2019 Mai Vu Tuyen
@@ -13,6 +13,7 @@ redistribute your new version, it MUST be open source.
 -----------------------------------------------------------*/
 #include "MainControlDialog.h"
 #include "AppDelegate.h"
+#include "../../../engine/Engine.h"
 #include <Shlobj.h>
 #include <Uxtheme.h>
 
@@ -142,6 +143,7 @@ void MainControlDialog::initDialog() {
     createToolTip(checkRememberTableCode, IDS_STRING_REMEMBER_TABLE_CODE);
 
     checkAllowOtherLanguages = GetDlgItem(hTabPage1, IDC_CHECK_OTHER_LANGUAGES);
+    checkBlockBackslash = GetDlgItem(hTabPage1, IDC_CHECK_BLOCK_BACKSLASH);
     createToolTip(checkAllowOtherLanguages, IDS_STRING_OTHER_LANGUAGES);
 
     checkTempOffOpenKey = GetDlgItem(hTabPage1, IDC_CHECK_TEMP_OFF_OPEN_KEY);
@@ -236,6 +238,9 @@ INT_PTR MainControlDialog::eventProc(HWND hDlg, UINT uMsg, WPARAM wParam, LPARAM
         case IDC_BUTTON_MACRO_TABLE:
             AppDelegate::getInstance()->onMacroTable();
             break;
+        case IDC_BTN_CUSTOM_INPUT_METHOD:
+            AppDelegate::getInstance()->onCustomInputMethodDialog();
+            break;
         case IDC_BUTTON_CHECK_UPDATE:
             onUpdateButton();
             break;
@@ -324,8 +329,12 @@ INT_PTR MainControlDialog::tabPageEventProc(HWND hDlg, UINT uMsg, WPARAM wParam,
 }
 
 void MainControlDialog::fillData() {
-    SendMessage(comboBoxInputType, CB_SETCURSEL, vInputType, 0);
+    int sel = vInputType;
+    if (sel == vTuBinhTranDonGian) sel = 3;
+    else if (sel == vTuDinhNghia) sel = 4;
+    SendMessage(comboBoxInputType, CB_SETCURSEL, sel, 0);
     SendMessage(comboBoxTableCode, CB_SETCURSEL, vCodeTable, 0);
+    EnableWindow(GetDlgItem(hDlg, IDC_BTN_CUSTOM_INPUT_METHOD), vInputType == vTuDinhNghia);
 
     SendMessage(checkCtrl, BM_SETCHECK, HAS_CONTROL(vSwitchKeyStatus) ? 1 : 0, 0);
     SendMessage(checkAlt, BM_SETCHECK, HAS_OPTION(vSwitchKeyStatus) ? 1 : 0, 0);
@@ -351,6 +360,7 @@ void MainControlDialog::fillData() {
     SendMessage(checkRememberTableCode, BM_SETCHECK, vRememberCode ? 1 : 0, 0);
     SendMessage(checkAllowOtherLanguages, BM_SETCHECK, vOtherLanguage ? 1 : 0, 0);
     SendMessage(checkTempOffOpenKey, BM_SETCHECK, vTempOffOpenKey ? 1 : 0, 0);
+    SendMessage(checkBlockBackslash, BM_SETCHECK, vBlockBackslash ? 1 : 0, 0);
 
     SendMessage(checkSmartSwitchKey, BM_SETCHECK, vUseSmartSwitchKey ? 1 : 0, 0);
     SendMessage(checkCapsFirstChar, BM_SETCHECK, vUpperCaseFirstChar ? 1 : 0, 0);
@@ -387,7 +397,12 @@ void MainControlDialog::setSwitchKey(const unsigned short& code) {
 
 void MainControlDialog::onComboBoxSelected(const HWND& hCombobox, const int& comboboxId) {
     if (hCombobox == comboBoxInputType) {
-        APP_SET_DATA(vInputType, (int)SendMessage(hCombobox, CB_GETCURSEL, 0, 0));
+        int sel = (int)SendMessage(hCombobox, CB_GETCURSEL, 0, 0);
+        int type = sel;
+        if (sel == 3) type = vTuBinhTranDonGian;
+        else if (sel == 4) type = vTuDinhNghia;
+        APP_SET_DATA(vInputType, type);
+        EnableWindow(GetDlgItem(hDlg, IDC_BTN_CUSTOM_INPUT_METHOD), vInputType == vTuDinhNghia);
     }
     else if (hCombobox == comboBoxTableCode) {
         APP_SET_DATA(vCodeTable, (int)SendMessage(hCombobox, CB_GETCURSEL, 0, 0));
@@ -512,6 +527,11 @@ void MainControlDialog::onCheckboxClicked(const HWND& hWnd) {
     else if (hWnd == checkTempOffSpelling) {
         val = (int)SendMessage(hWnd, BM_GETCHECK, 0, 0);
         APP_SET_DATA(vTempOffSpelling, val ? 1 : 0);
+    }
+    else if (hWnd == checkBlockBackslash) {
+        val = (int)SendMessage(hWnd, BM_GETCHECK, 0, 0);
+        vBlockBackslash = val ? 1 : 0;
+        APP_SET_DATA(vBlockBackslash, vBlockBackslash);
     }
     else if (hWnd == checkQuickStartConsonant) {
         val = (int)SendMessage(hWnd, BM_GETCHECK, 0, 0);
