@@ -233,15 +233,12 @@ static inline void prepareUnicodeEvent(INPUT& input, const Uint16& unicode, cons
 }
 
 static void SendCombineKey(const Uint16& key1, const Uint16& key2, const DWORD& flagKey1=0, const DWORD& flagKey2 = 0) {
-	prepareKeyEvent(keyEvent[0], key1, true, flagKey1);
-	SendInput(1, keyEvent, sizeof(INPUT));
-
-	prepareKeyEvent(keyEvent[0], key2, true, flagKey2);
-	prepareKeyEvent(keyEvent[1], key2, false, flagKey2);
-	SendInput(2, keyEvent, sizeof(INPUT));
-
-	prepareKeyEvent(keyEvent[0], key1, false, flagKey1);
-	SendInput(1, keyEvent, sizeof(INPUT));
+	INPUT events[4];
+	prepareKeyEvent(events[0], key1, true, flagKey1);
+	prepareKeyEvent(events[1], key2, true, flagKey2);
+	prepareKeyEvent(events[2], key2, false, flagKey2);
+	prepareKeyEvent(events[3], key1, false, flagKey1);
+	SendInput(4, events, sizeof(INPUT));
 }
 
 static void SendKeyCode(Uint32 data) {
@@ -254,12 +251,12 @@ static void SendKeyCode(Uint32 data) {
 		} else {
 			Uint16 high = (Uint16)(((pureChar - 0x10000) >> 10) + 0xD800);
 			Uint16 low = (Uint16)(((pureChar - 0x10000) & 0x3FF) + 0xDC00);
-			prepareUnicodeEvent(keyEvent[0], high, true);
-			prepareUnicodeEvent(keyEvent[1], high, false);
-			SendInput(2, keyEvent, sizeof(INPUT));
-			prepareUnicodeEvent(keyEvent[0], low, true);
-			prepareUnicodeEvent(keyEvent[1], low, false);
-			SendInput(2, keyEvent, sizeof(INPUT));
+			INPUT events[4];
+			prepareUnicodeEvent(events[0], high, true);
+			prepareUnicodeEvent(events[1], high, false);
+			prepareUnicodeEvent(events[2], low, true);
+			prepareUnicodeEvent(events[3], low, false);
+			SendInput(4, events, sizeof(INPUT));
 		}
 		return;
 	}
@@ -503,8 +500,9 @@ void switchLanguage() {
 		vLanguage = 1;
 	else
 		vLanguage = 0;
-	if (HAS_BEEP(vSwitchKeyStatus))
-		MessageBeep(MB_OK);
+	if (HAS_BEEP(vSwitchKeyStatus)) {
+		Beep(vLanguage ? 1000 : 400, 100);
+	}
 	AppDelegate::getInstance()->onInputMethodChangedFromHotKey();
 	if (vUseSmartSwitchKey) {
 		setAppInputMethodStatus(OpenKeyHelper::getFrontMostAppExecuteName(), vLanguage | (vCodeTable << 1));
@@ -658,6 +656,9 @@ LRESULT CALLBACK keyboardHookProcess(int nCode, WPARAM wParam, LPARAM lParam) {
 		return CallNextHookEx(hKeyboardHook, nCode, wParam, lParam);
 	}
 	
+	static Uint16 _lastDoubleModKey = 0;
+	static DWORD _lastDoubleModTime = 0;
+
 	//check modifier key
 	if (wParam == WM_KEYDOWN || wParam == WM_SYSKEYDOWN) {
 		//LOG(L"Key down: %d\n", keyboardData->vkCode);
@@ -668,15 +669,36 @@ LRESULT CALLBACK keyboardHookProcess(int nCode, WPARAM wParam, LPARAM lParam) {
 	}
 	
 	bool isTriggerModifier = false;
-	if (vUseMacro) {
-		if (keyboardData->vkCode == VK_LSHIFT && (vMacroTriggerMask & 0x04)) isTriggerModifier = true;
-		else if (keyboardData->vkCode == VK_RSHIFT && (vMacroTriggerMask & 0x08)) isTriggerModifier = true;
-		else if (keyboardData->vkCode == VK_LCONTROL && (vMacroTriggerMask & 0x10)) isTriggerModifier = true;
-		else if (keyboardData->vkCode == VK_RCONTROL && (vMacroTriggerMask & 0x20)) isTriggerModifier = true;
+	if (vUseMacro && (wParam == WM_KEYUP || wParam == WM_SYSKEYUP)) {
+		DWORD now = GetTickCount();
+		DWORD doubleClickTime = GetDoubleClickTime();
+		if (doubleClickTime < 300) doubleClickTime = 300;
+		if (doubleClickTime > 600) doubleClickTime = 600;
+
+		Uint16 vk = (Uint16)keyboardData->vkCode;
+		if ((vk == VK_LSHIFT && (vMacroTriggerMask & 0x04)) ||
+			(vk == VK_RSHIFT && (vMacroTriggerMask & 0x08))) {
+			if (_lastDoubleModKey == vk && (now - _lastDoubleModTime) <= doubleClickTime) {
+				isTriggerModifier = true;
+				_lastDoubleModKey = 0;
+				_lastDoubleModTime = 0;
+			} else {
+				_lastDoubleModKey = vk;
+				_lastDoubleModTime = now;
+			}
+		} else {
+			_lastDoubleModKey = 0;
+		}
+	} else if (wParam == WM_KEYDOWN || wParam == WM_SYSKEYDOWN) {
+		Uint16 vk = (Uint16)keyboardData->vkCode;
+		if (vk != VK_LSHIFT && vk != VK_RSHIFT) {
+			_lastDoubleModKey = 0;
+		}
 	}
 
 	if (isTriggerModifier) {
 		_isFlagKey = false;
+		_keycode = (Uint16)keyboardData->vkCode;
 	}
 
 	if (!_isFlagKey && wParam != WM_KEYUP && wParam != WM_SYSKEYUP)
@@ -732,6 +754,9 @@ LRESULT CALLBACK keyboardHookProcess(int nCode, WPARAM wParam, LPARAM lParam) {
 			if (vTempOffOpenKey && !_hasJustUsedHotKey && _lastFlag & MASK_ALT) {
 				vTempOffEngine();
 			}
+			if (!_hasJustUsedHotKey && (_lastFlag & MASK_CONTROL)) {
+				vClearMacroKey();
+			}
 			_lastFlag = _flag;
 			_hasJustUsedHotKey = false;
 		}
@@ -741,8 +766,8 @@ LRESULT CALLBACK keyboardHookProcess(int nCode, WPARAM wParam, LPARAM lParam) {
 
 	//if is in english mode
 	if (vLanguage == 0) {
-		if (vUseMacro && vUseMacroInEnglishMode && (wParam == WM_KEYDOWN || wParam == WM_SYSKEYDOWN)) {
-			vEnglishMode(((wParam == WM_KEYDOWN || wParam == WM_SYSKEYDOWN) ? vKeyEventState::KeyDown : vKeyEventState::MouseDown),
+		if (vUseMacro && vUseMacroInEnglishMode && ((wParam == WM_KEYDOWN || wParam == WM_SYSKEYDOWN) || isTriggerModifier)) {
+			vEnglishMode(((wParam == WM_KEYDOWN || wParam == WM_SYSKEYDOWN) ? vKeyEventState::KeyDown : (isTriggerModifier ? vKeyEventState::KeyUp : vKeyEventState::MouseDown)),
 				_keycode,
 				(_flag & MASK_SHIFT) || (_flag & MASK_CAPITAL),
 				OTHER_CONTROL_KEY);
@@ -761,10 +786,10 @@ LRESULT CALLBACK keyboardHookProcess(int nCode, WPARAM wParam, LPARAM lParam) {
 	}
 
 	//handle keyboard
-	if (wParam == WM_KEYDOWN || wParam == WM_SYSKEYDOWN) {
+	if (wParam == WM_KEYDOWN || wParam == WM_SYSKEYDOWN || isTriggerModifier) {
 		//send event signal to Engine
 		vKeyHandleEvent(vKeyEvent::Keyboard,
-						vKeyEventState::KeyDown,
+						isTriggerModifier ? vKeyEventState::KeyUp : vKeyEventState::KeyDown,
 						_keycode,
 						(_flag & MASK_SHIFT && _flag & MASK_CAPITAL) ? 0 : (_flag & MASK_SHIFT ? 1 : (_flag & MASK_CAPITAL ? 2 : 0)),
 						OTHER_CONTROL_KEY);
