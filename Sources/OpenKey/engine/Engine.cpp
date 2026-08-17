@@ -1309,21 +1309,19 @@ bool isSpecialKeyCustom(Uint16 keyCode) {
 }
 
 void checkForStandaloneCharTBT(const Uint16& data, const bool& isCaps, const Uint32& keyWillReverse, const Uint32& maskToAdd) {
-    if (shouldKeepTBTStandaloneKeyRaw(data) && restoreTBTStandaloneThenInsertRaw(data, isCaps)) {
-        return;
-    }
-
-    if (_index > 0 && CHR(_index - 1) == keyWillReverse && (TypingWord[_index - 1] & maskToAdd) && (TypingWord[_index - 1] & STANDALONE_MASK)) {
+    // Handle 'ư' + ']' -> 'ươ' — phải đặt trước shouldKeepTBTStandaloneKeyRaw vì nó sẽ bị early-return
+    if (data == KEY_RIGHT_BRACKET && _index > 0 && CHR(_index - 1) == KEY_U && (TypingWord[_index - 1] & TONEW_MASK)) {
+        TypingWord[_index] = KEY_O | TONEW_MASK | (isCaps ? CAPS_MASK : 0);
+        _index++;
         hCode = vWillProcess;
-        hBPC = 1;
+        hBPC = 0;
         hNCC = 1;
         hExt = 4;
-        TypingWord[_index - 1] = data | (isCaps ? CAPS_MASK : 0); // No STANDALONE_MASK
         hData[0] = GET(TypingWord[_index - 1]);
         saveWord();
         return;
     }
-    // Handle 'ơ' + '[' -> auto correct 'ơư' to 'ươ'
+    // Handle 'ơ' + '[' -> auto correct 'ơư' to 'ươ' — tương tự, đặt trước shouldKeepTBTStandaloneKeyRaw
     if (data == KEY_LEFT_BRACKET && _index > 0 && CHR(_index - 1) == KEY_O && (TypingWord[_index - 1] & TONEW_MASK)) {
         Uint32 prevCaps = TypingWord[_index - 1] & CAPS_MASK;
         TypingWord[_index - 1] = KEY_U | TONEW_MASK | prevCaps;
@@ -1334,6 +1332,21 @@ void checkForStandaloneCharTBT(const Uint16& data, const bool& isCaps, const Uin
         hNCC = 2;
         hExt = 4;
         hData[1] = GET(TypingWord[_index - 2]);
+        hData[0] = GET(TypingWord[_index - 1]);
+        saveWord();
+        return;
+    }
+
+    if (shouldKeepTBTStandaloneKeyRaw(data) && restoreTBTStandaloneThenInsertRaw(data, isCaps)) {
+        return;
+    }
+
+    if (_index > 0 && CHR(_index - 1) == keyWillReverse && (TypingWord[_index - 1] & maskToAdd) && (TypingWord[_index - 1] & STANDALONE_MASK)) {
+        hCode = vWillProcess;
+        hBPC = 1;
+        hNCC = 1;
+        hExt = 4;
+        TypingWord[_index - 1] = data | (isCaps ? CAPS_MASK : 0); // No STANDALONE_MASK
         hData[0] = GET(TypingWord[_index - 1]);
         saveWord();
         return;

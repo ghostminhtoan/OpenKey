@@ -72,10 +72,8 @@ INT_PTR MacroDialog::eventProc(HWND hDlg, UINT uMsg, WPARAM wParam, LPARAM lPara
 				wstring summary = L"";
 				if (vMacroTriggerMask & 0x01) summary += L"Space, ";
 				if (vMacroTriggerMask & 0x02) summary += L"Enter, ";
-				if (vMacroTriggerMask & 0x04) summary += L"LShift, ";
-				if (vMacroTriggerMask & 0x08) summary += L"RShift, ";
-				if (vMacroTriggerMask & 0x10) summary += L"LControl, ";
-				if (vMacroTriggerMask & 0x20) summary += L"RControl, ";
+				if (vMacroTriggerMask & 0x04) summary += L"2x LShift, ";
+				if (vMacroTriggerMask & 0x08) summary += L"2x RShift, ";
 				if (!summary.empty()) {
 					summary = summary.substr(0, summary.length() - 2);
 				} else {
@@ -324,12 +322,10 @@ void MacroDialog::initDialog() {
 
 	HWND hComboTriggers = GetDlgItem(hDlg, IDC_COMBO_MACRO_TRIGGERS);
 	if (hComboTriggers) {
-		SendMessage(hComboTriggers, CB_ADDSTRING, 0, (LPARAM)_T("Space"));
-		SendMessage(hComboTriggers, CB_ADDSTRING, 0, (LPARAM)_T("Enter"));
-		SendMessage(hComboTriggers, CB_ADDSTRING, 0, (LPARAM)_T("Left Shift"));
-		SendMessage(hComboTriggers, CB_ADDSTRING, 0, (LPARAM)_T("Right Shift"));
-		SendMessage(hComboTriggers, CB_ADDSTRING, 0, (LPARAM)_T("Left Control"));
-		SendMessage(hComboTriggers, CB_ADDSTRING, 0, (LPARAM)_T("Right Control"));
+		SendMessage(hComboTriggers, CB_ADDSTRING, 0, (LPARAM)_T("Phím Space"));
+		SendMessage(hComboTriggers, CB_ADDSTRING, 0, (LPARAM)_T("Phím Enter"));
+		SendMessage(hComboTriggers, CB_ADDSTRING, 0, (LPARAM)_T("Double Left Shift"));
+		SendMessage(hComboTriggers, CB_ADDSTRING, 0, (LPARAM)_T("Double Right Shift"));
 		SendMessage(hComboTriggers, CB_SETCURSEL, (WPARAM)-1, 0);
 	}
 

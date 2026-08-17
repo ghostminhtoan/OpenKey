@@ -248,6 +248,11 @@ void vSetCheckSpelling();
 void vTempOffEngine(const bool& off=true);
 
 /**
+ * clear current macro buffer
+ */
+void vClearMacroKey();
+
+/**
  * some utils function
  */
 wstring utf8ToWideString(const string& str);

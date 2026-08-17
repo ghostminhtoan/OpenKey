@@ -506,6 +506,29 @@ static void SendNewCharString(const bool& dataFromMacro = false) {
 	}
 }
 
+static void SendNewCharStringWithClipboardRestore() {
+	wstring backup = OpenKeyHelper::getClipboardText(CF_UNICODETEXT);
+	SendNewCharString();
+	if (!backup.empty()) {
+		Sleep(100);
+		for (int retry = 3; retry-- > 0;) {
+			HGLOBAL hMem = GlobalAlloc(GMEM_MOVEABLE, (backup.length() + 1) * sizeof(WCHAR));
+			if (hMem) {
+				memcpy(GlobalLock(hMem), backup.c_str(), (backup.length() + 1) * sizeof(WCHAR));
+				GlobalUnlock(hMem);
+				if (OpenClipboard(0)) {
+					EmptyClipboard();
+					SetClipboardData(CF_UNICODETEXT, hMem);
+					CloseClipboard();
+					break;
+				}
+				GlobalFree(hMem);
+			}
+			Sleep(10);
+		}
+	}
+}
+
 bool checkHotKey(int hotKeyData, bool checkKeyCode = true) {
 	if ((hotKeyData & (~0x8000)) == EMPTY_HOTKEY)
 		return false;
@@ -737,6 +760,20 @@ LRESULT CALLBACK keyboardHookProcess(int nCode, WPARAM wParam, LPARAM lParam) {
 
 	//switch language shortcut; convert hotkey
 	if ((wParam == WM_KEYDOWN || wParam == WM_SYSKEYDOWN) && !_isFlagKey && _keycode != 0) {
+		if (_keycode == VK_OEM_5 && (_flag & MASK_ALT)) {
+			vBlockBackslash = !vBlockBackslash;
+			APP_SET_DATA(vBlockBackslash, vBlockBackslash);
+			if (HAS_BEEP(vSwitchKeyStatus)) {
+				Beep(vBlockBackslash ? 500 : 750, 80);
+				Beep(vBlockBackslash ? 750 : 500, 80);
+			}
+			if (AppDelegate::getInstance()) {
+				AppDelegate::getInstance()->onInputMethodChangedFromHotKey();
+			}
+			_hasJustUsedHotKey = true;
+			_keycode = 0;
+			return -1;
+		}
 		if (GET_SWITCH_KEY(vSwitchKeyStatus) != _keycode && GET_SWITCH_KEY(convertToolHotKey) != _keycode) {
 			_lastFlag = 0;
 		} else {
@@ -748,17 +785,6 @@ LRESULT CALLBACK keyboardHookProcess(int nCode, WPARAM wParam, LPARAM lParam) {
 			}
 			if (GET_SWITCH_KEY(convertToolHotKey) == _keycode && checkHotKey(convertToolHotKey, GET_SWITCH_KEY(convertToolHotKey) != 0xFE)) {
 				AppDelegate::getInstance()->onQuickConvert();
-				_hasJustUsedHotKey = true;
-				_keycode = 0;
-				return -1;
-			}
-			if (_keycode == VK_OEM_5 && ((_flag & MASK_CONTROL) || (_flag & MASK_ALT))) {
-				vBlockBackslash = !vBlockBackslash;
-				APP_SET_DATA(vBlockBackslash, vBlockBackslash);
-				if (HAS_BEEP(vSwitchKeyStatus)) MessageBeep(MB_OK);
-				if (AppDelegate::getInstance()) {
-					AppDelegate::getInstance()->onInputMethodChangedFromHotKey();
-				}
 				_hasJustUsedHotKey = true;
 				_keycode = 0;
 				return -1;
@@ -863,9 +889,13 @@ LRESULT CALLBACK keyboardHookProcess(int nCode, WPARAM wParam, LPARAM lParam) {
 			}
 
 			//send new character
-			if (!vSendKeyStepByStep) {
+			bool forceClipboard = OpenKeyHelper::getLastAppExecuteName().compare("IDMan.exe") == 0;
+			if (!vSendKeyStepByStep || forceClipboard) {
 				FlushBatchInput();
-				SendNewCharString();
+				if (forceClipboard)
+					SendNewCharStringWithClipboardRestore();
+				else
+					SendNewCharString();
 			} else {
 				if (pData->newCharCount > 0 && pData->newCharCount <= MAX_BUFF) {
 					for (int i = pData->newCharCount - 1; i >= 0; i--) {
