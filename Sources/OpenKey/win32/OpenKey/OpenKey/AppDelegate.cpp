@@ -212,8 +212,13 @@ void AppDelegate::onDefaultConfig() {
 void AppDelegate::onToggleVietnamese() {
 	APP_SET_DATA(vLanguage, vLanguage ? 0 : 1);
 	if (HAS_BEEP(vSwitchKeyStatus)) {
-		Beep(vLanguage ? 1000 : 400, 80);
-		Beep(vLanguage ? 1400 : 300, 80);
+		if (vLanguage) { // chuyển sang VI: trầm → bổng
+			Beep(500, 80);
+			Beep(900, 80);
+		} else { // chuyển sang EN: bổng → trầm
+			Beep(900, 80);
+			Beep(500, 80);
+		}
 	}
 	if (mainDialog) {
 		mainDialog->fillData();
