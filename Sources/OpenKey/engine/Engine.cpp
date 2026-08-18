@@ -145,6 +145,7 @@ bool canApplyTBTStandaloneInVowel(const Uint16& data);
 void reverseLastStandaloneChar(const Uint32& keyCode, const bool& isCaps);
 void insertW(const Uint16& data, const bool& isCaps);
 void checkForStandaloneChar(const Uint16& data, const bool& isCaps, const Uint32& keyWillReverse);
+bool getTBTStandaloneRawKey(const Uint32& value, Uint16& rawKey);
 
 static std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>> converter;
 wstring utf8ToWideString(const string& str) {
@@ -260,9 +261,13 @@ bool shouldKeepTBTStandaloneKeyRaw(const Uint16& data) {
         return true;
     if (_index > 0 && IS_NUMBER_KEY(CHR(_index - 1)))
         return true;
-    // Nếu ký tự trước là TBT standalone đã xử lý (ví dụ: 6→â, 7→ê...) thì giữ số tiếp nguyên raw
-    if (_index > 0 && (TypingWord[_index - 1] & STANDALONE_MASK))
-        return true;
+    // Nếu ký tự trước là TBT standalone đã xử lý (ví dụ: 6→â, 7→ê...) thì coi như đã gõ số, giữ nguyên số tiếp theo
+    if (_index > 0 && (TypingWord[_index - 1] & STANDALONE_MASK)) {
+        Uint16 prevRawKey;
+        if (getTBTStandaloneRawKey(TypingWord[_index - 1], prevRawKey) && IS_NUMBER_KEY(prevRawKey)) {
+            return true;
+        }
+    }
     return _index > 0 && !isTBTConsonantContextAt(_index - 1) && !canApplyTBTStandaloneInVowel(data);
 }
 
