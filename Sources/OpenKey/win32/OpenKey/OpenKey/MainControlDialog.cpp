@@ -450,13 +450,8 @@ void MainControlDialog::onCheckboxClicked(const HWND& hWnd) {
         val = (int)SendMessage(checkVietnamese, BM_GETCHECK, 0, 0);
         APP_SET_DATA(vLanguage, val ? 1 : 0);
         if (HAS_BEEP(vSwitchKeyStatus)) {
-            if (vLanguage) { // chuyển sang VI: trầm → bổng
-                Beep(500, 80);
-                Beep(900, 80);
-            } else { // chuyển sang EN: bổng → trầm
-                Beep(900, 80);
-                Beep(500, 80);
-            }
+            Beep(vLanguage ? 1000 : 400, 80);
+            Beep(vLanguage ? 1400 : 300, 80);
         }
         SystemTrayHelper::updateData();
         if (vUseSmartSwitchKey) {
@@ -468,13 +463,8 @@ void MainControlDialog::onCheckboxClicked(const HWND& hWnd) {
         val = (int)SendMessage(checkVietnamese, BM_GETCHECK, 0, 0);
         APP_SET_DATA(vLanguage, val ? 1 : 0);
         if (HAS_BEEP(vSwitchKeyStatus)) {
-            if (vLanguage) { // chuyển sang VI: trầm → bổng
-                Beep(500, 80);
-                Beep(900, 80);
-            } else { // chuyển sang EN: bổng → trầm
-                Beep(900, 80);
-                Beep(500, 80);
-            }
+            Beep(vLanguage ? 1000 : 400, 80);
+            Beep(vLanguage ? 1400 : 300, 80);
         }
         SystemTrayHelper::updateData();
         if (vUseSmartSwitchKey) {

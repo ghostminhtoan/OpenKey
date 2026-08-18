@@ -145,7 +145,6 @@ bool canApplyTBTStandaloneInVowel(const Uint16& data);
 void reverseLastStandaloneChar(const Uint32& keyCode, const bool& isCaps);
 void insertW(const Uint16& data, const bool& isCaps);
 void checkForStandaloneChar(const Uint16& data, const bool& isCaps, const Uint32& keyWillReverse);
-bool getTBTStandaloneRawKey(const Uint32& value, Uint16& rawKey);
 
 static std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>> converter;
 wstring utf8ToWideString(const string& str) {
@@ -255,19 +254,10 @@ bool isTBTConsonantContextAt(const int& index) {
 bool shouldKeepTBTStandaloneKeyRaw(const Uint16& data) {
     if (vInputType != vTuBinhTranDonGian || !IS_TBT_STANDALONE_KEY(data))
         return false;
-    if (_specialChar.size() > 0)
-        return true;
     if (_justTypedNumber)
         return true;
-    if (_index > 0 && IS_NUMBER_KEY(CHR(_index - 1)))
+    if (_index > 0 && IS_NUMBER_KEY(CHR(_index - 1)) && !(TypingWord[_index - 1] & CAPS_MASK))
         return true;
-    // Nếu ký tự trước là TBT standalone đã xử lý (ví dụ: 6→â, 7→ê...) thì coi như đã gõ số, giữ nguyên số tiếp theo
-    if (_index > 0 && (TypingWord[_index - 1] & STANDALONE_MASK)) {
-        Uint16 prevRawKey;
-        if (getTBTStandaloneRawKey(TypingWord[_index - 1], prevRawKey) && IS_NUMBER_KEY(prevRawKey)) {
-            return true;
-        }
-    }
     return _index > 0 && !isTBTConsonantContextAt(_index - 1) && !canApplyTBTStandaloneInVowel(data);
 }
 
@@ -413,6 +403,10 @@ bool restoreTBTStandaloneThenInsertRaw(const Uint16& data, const bool& isCaps) {
         hNCC = 1;
         hData[0] = TypingWord[_index - 1];
         saveWord();
+        if ((TypingWord[_index - 1] & CAPS_MASK) || IS_BRACKET_KEY(previousRawKey)) {
+            _specialChar.push_back(TypingWord[_index - 1]);
+            _index = 0;
+        }
         return true;
     }
 
@@ -1827,7 +1821,9 @@ bool checkQuickConsonant() {
 }
 /*==========================================================================================================*/
 
-void vEnglishMode(const vKeyEventState& state, const Uint16& data, const bool& isCaps, const bool& otherControlKey) {
+void vEnglishMode(const vKeyEventState& state, const Uint16& rawData, const bool& isCaps, const bool& otherControlKey) {
+    Uint16 data = (rawData >= 0x60 && rawData <= 0x69) ? (KEY_0 + (rawData - 0x60)) :
+                  (rawData == 0x6E ? KEY_DOT : (rawData == 0x6F ? KEY_SLASH : (rawData == 0x6D ? KEY_MINUS : rawData)));
     hCode = vDoNothing;
     hExt = 0;
     bool isCtrlKey = (data == VK_LCONTROL || data == VK_RCONTROL || data == VK_CONTROL);
@@ -1842,7 +1838,7 @@ void vEnglishMode(const vKeyEventState& state, const Uint16& data, const bool& i
         if (!hasCtrlModifier && (isMacroTriggerKey(data) || isPunctTrigger) && !_hasHandledMacro && findMacroMatch(hMacroKey, hMacroData, macroBackspace)) {
             hCode = vReplaceMaro;
             hBPC = macroBackspace;
-            hExt = (data == KEY_SPACE ? 6 : (isPunctTrigger ? 7 : 5));
+            hExt = (data == KEY_SPACE ? 6 : ((data == KEY_RETURN || data == KEY_ENTER) ? 8 : (isPunctTrigger ? 7 : 5)));
         }
         hMacroKey.clear();
         _willTempOffEngine = false;
@@ -1872,9 +1868,11 @@ int vBlockBackslash = 0;
 
 void vKeyHandleEvent(const vKeyEvent& event,
                      const vKeyEventState& state,
-                     const Uint16& data,
+                     const Uint16& rawData,
                      const Uint8& capsStatus,
                      const bool& otherControlKey) {
+    Uint16 data = (rawData >= 0x60 && rawData <= 0x69) ? (KEY_0 + (rawData - 0x60)) :
+                  (rawData == 0x6E ? KEY_DOT : (rawData == 0x6F ? KEY_SLASH : (rawData == 0x6D ? KEY_MINUS : rawData)));
     if (vBlockBackslash && (vInputType == vTelex || vInputType == vSimpleTelex1 || vInputType == vSimpleTelex2 || vInputType == vTuBinhTranDonGian) && data == KEY_BACK_SLASH) {
         hCode = vWillProcess;
         hBPC = 0;
@@ -1895,6 +1893,10 @@ void vKeyHandleEvent(const vKeyEvent& event,
     bool isTBTNumberBreak = false;
     if ((vInputType == vTuBinhTranDonGian) && IS_NUMBER_KEY(data)) {
         if (data == KEY_0) {
+            if (_index > 0 && restoreTBTStandaloneThenInsertRaw(data, _isCaps)) {
+                _justTypedNumber = (capsStatus != 1);
+                return;
+            }
             isTBTNumberBreak = true;
         } else if (IS_TBT_NUMBER_STANDALONE_KEY(data)) {
             isTBTNumberBreak = false; // Phím 6,7,8,9 được xử lý riêng bởi standalone logic
@@ -1926,7 +1928,7 @@ void vKeyHandleEvent(const vKeyEvent& event,
             if (findMacroMatch(hMacroKey, hMacroData, macroBackspace)) {
                 hCode = vReplaceMaro;
                 hBPC = macroBackspace;
-                hExt = (data == KEY_SPACE ? 6 : (isPunctTrigger ? 7 : 5));
+                hExt = (data == KEY_SPACE ? 6 : ((data == KEY_RETURN || data == KEY_ENTER) ? 8 : (isPunctTrigger ? 7 : 5)));
                 _hasHandledMacro = true;
             }
         } else if (hasCtrlModifier) {
@@ -2171,9 +2173,9 @@ void vKeyHandleEvent(const vKeyEvent& event,
     
     if (vInputType == vTuBinhTranDonGian) {
         if (state == KeyDown) {
-            if (IS_NUMBER_KEY(data)) {
+            if (IS_NUMBER_KEY(data) && capsStatus != 1) {
                 _justTypedNumber = (hCode == vDoNothing);
-            } else if (isLetterKey(data) || IS_BRACKET_KEY(data)) {
+            } else if (isLetterKey(data) || IS_BRACKET_KEY(data) || capsStatus == 1) {
                 _justTypedNumber = false;
             } else if (data == KEY_SPACE || data == KEY_RETURN || data == KEY_ENTER) {
                 _justTypedNumber = false;

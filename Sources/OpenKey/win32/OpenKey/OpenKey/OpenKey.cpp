@@ -52,6 +52,29 @@ static bool _flagChanged = false, _isFlagKey;
 static Uint16 _keycode;
 static Uint16 _newChar, _newCharHi;
 
+static inline void SyncModifierFlags() {
+	if ((GetAsyncKeyState(VK_LSHIFT) & 0x8000) || (GetAsyncKeyState(VK_RSHIFT) & 0x8000)) _flag |= MASK_SHIFT;
+	else _flag &= ~MASK_SHIFT;
+
+	if ((GetAsyncKeyState(VK_LCONTROL) & 0x8000) || (GetAsyncKeyState(VK_RCONTROL) & 0x8000)) _flag |= MASK_CONTROL;
+	else _flag &= ~MASK_CONTROL;
+
+	if ((GetAsyncKeyState(VK_LMENU) & 0x8000) || (GetAsyncKeyState(VK_RMENU) & 0x8000)) _flag |= MASK_ALT;
+	else _flag &= ~MASK_ALT;
+
+	if ((GetAsyncKeyState(VK_LWIN) & 0x8000) || (GetAsyncKeyState(VK_RWIN) & 0x8000)) _flag |= MASK_WIN;
+	else _flag &= ~MASK_WIN;
+
+	if (GetKeyState(VK_CAPITAL) & 0x0001) _flag |= MASK_CAPITAL;
+	else _flag &= ~MASK_CAPITAL;
+
+	if (GetKeyState(VK_NUMLOCK) & 0x0001) _flag |= MASK_NUMLOCK;
+	else _flag &= ~MASK_NUMLOCK;
+
+	if (GetKeyState(VK_SCROLL) & 0x0001) _flag |= MASK_SCROLL;
+	else _flag &= ~MASK_SCROLL;
+}
+
 static vector<Uint16> _newCharString;
 static Uint16 _newCharSize;
 static bool _willSendControlKey = false;
@@ -101,7 +124,7 @@ void OpenKeyInit() {
 	APP_GET_DATA(vCheckSpelling, 1);
 	APP_GET_DATA(vUseModernOrthography, 0);
 	APP_GET_DATA(vQuickTelex, 0);
-	APP_GET_DATA(vSwitchKeyStatus, 0x7A000206);
+	APP_GET_DATA(vSwitchKeyStatus, 0x5A00825A);
 	APP_GET_DATA(vRestoreIfWrongSpelling, 1);
 	APP_GET_DATA(vFixRecommendBrowser, 1);
 	APP_GET_DATA(vUseMacro, 1);
@@ -161,14 +184,7 @@ void OpenKeyInit() {
 	backspaceEvent[1].ki.dwExtraInfo = 1;
 
 	//get key state
-	_flag = 0;
-	if (GetKeyState(VK_LSHIFT) < 0 || GetKeyState(VK_RSHIFT) < 0) _flag |= MASK_SHIFT;
-	if (GetKeyState(VK_LCONTROL) < 0 || GetKeyState(VK_RCONTROL) < 0) _flag |= MASK_CONTROL;
-	if (GetKeyState(VK_LMENU) < 0 || GetKeyState(VK_RMENU) < 0) _flag |= MASK_ALT;
-	if (GetKeyState(VK_LWIN) < 0 || GetKeyState(VK_RWIN) < 0) _flag |= MASK_WIN;
-	if (GetKeyState(VK_NUMLOCK) < 0) _flag |= MASK_NUMLOCK;
-	if (GetKeyState(VK_CAPITAL) == 1) _flag |= MASK_CAPITAL;
-	if (GetKeyState(VK_SCROLL) < 0) _flag |= MASK_SCROLL;
+	SyncModifierFlags();
 
 	//init and load macro data from text file, fallback to old text/binary data
 	wstring macroPath = getExecuteFolderPath() + L"\\openkeymacro.txt";
@@ -553,13 +569,7 @@ void switchLanguage() {
 	else
 		vLanguage = 0;
 	if (HAS_BEEP(vSwitchKeyStatus)) {
-		if (vLanguage) { // chuyển sang VI: trầm → bổng
-			Beep(500, 80);
-			Beep(900, 80);
-		} else { // chuyển sang EN: bổng → trầm
-			Beep(900, 80);
-			Beep(500, 80);
-		}
+		Beep(vLanguage ? 1000 : 400, 100);
 	}
 	AppDelegate::getInstance()->onInputMethodChangedFromHotKey();
 	if (vUseSmartSwitchKey) {
@@ -659,6 +669,8 @@ static void handleMacro() {
 
 	if (pData->extCode == 6) {
 		SendKeyCode(KEY_SPACE);
+	} else if (pData->extCode == 8) {
+		SendKeyCode(KEY_RETURN);
 	} else if (pData->extCode != 5 && pData->extCode != 7 && _keycode != VK_LSHIFT && _keycode != VK_RSHIFT) {
 		SendKeyCode(_keycode | (_flag & MASK_SHIFT ? CAPS_MASK : 0));
 	}
@@ -667,7 +679,7 @@ static void handleMacro() {
 static bool SetModifierMask(const Uint16& vkCode) {
 	// For caps lock case, toggling the flag isn't enough. We need to check the actual state, which should be done before each key press.
 	// Example: the caps lock state can be changed without the key being pressed, or the key toggle is made with admin privilege, making the app not able to detect the change.
-	if (GetKeyState(VK_CAPITAL) == 1) _flag |= MASK_CAPITAL;
+	if (GetKeyState(VK_CAPITAL) & 0x0001) _flag |= MASK_CAPITAL;
 	else _flag &= ~MASK_CAPITAL;
 
 	if (vkCode == VK_LSHIFT || vkCode == VK_RSHIFT) _flag |= MASK_SHIFT;
@@ -678,6 +690,7 @@ static bool SetModifierMask(const Uint16& vkCode) {
 	else if (vkCode == VK_SCROLL) _flag |= MASK_SCROLL;
 	else { 
 		_isFlagKey = false;
+		SyncModifierFlags();
 		return false; 
 	}
 	_isFlagKey = true;
@@ -693,6 +706,7 @@ static bool UnsetModifierMask(const Uint16& vkCode) {
 	else if (vkCode == VK_SCROLL) _flag &= ~MASK_SCROLL;
 	else { 
 		_isFlagKey = false;
+		SyncModifierFlags();
 		return false; 
 	}
 	_isFlagKey = true;
@@ -761,8 +775,18 @@ LRESULT CALLBACK keyboardHookProcess(int nCode, WPARAM wParam, LPARAM lParam) {
 		_keycode = (Uint16)keyboardData->vkCode;
 	}
 
-	if (!_isFlagKey && wParam != WM_KEYUP && wParam != WM_SYSKEYUP)
+	if (!_isFlagKey && wParam != WM_KEYUP && wParam != WM_SYSKEYUP) {
 		_keycode = (Uint16)keyboardData->vkCode;
+		if (_keycode >= VK_NUMPAD0 && _keycode <= VK_NUMPAD9) {
+			_keycode = KEY_0 + (_keycode - VK_NUMPAD0);
+		} else if (_keycode == VK_DECIMAL) {
+			_keycode = KEY_DOT;
+		} else if (_keycode == VK_DIVIDE) {
+			_keycode = KEY_SLASH;
+		} else if (_keycode == VK_SUBTRACT) {
+			_keycode = KEY_MINUS;
+		}
+	}
 
 	//switch language shortcut; convert hotkey
 	if ((wParam == WM_KEYDOWN || wParam == WM_SYSKEYDOWN) && !_isFlagKey && _keycode != 0) {
@@ -770,8 +794,8 @@ LRESULT CALLBACK keyboardHookProcess(int nCode, WPARAM wParam, LPARAM lParam) {
 			vBlockBackslash = !vBlockBackslash;
 			APP_SET_DATA(vBlockBackslash, vBlockBackslash);
 			if (HAS_BEEP(vSwitchKeyStatus)) {
-				Beep(vBlockBackslash ? 200 : 350, 80);
-				Beep(vBlockBackslash ? 350 : 200, 80);
+				Beep(vBlockBackslash ? 500 : 750, 80);
+				Beep(vBlockBackslash ? 750 : 500, 80);
 			}
 			if (AppDelegate::getInstance()) {
 				AppDelegate::getInstance()->onInputMethodChangedFromHotKey();
@@ -930,38 +954,78 @@ LRESULT CALLBACK keyboardHookProcess(int nCode, WPARAM wParam, LPARAM lParam) {
 }
 
 LRESULT CALLBACK mouseHookProcess(int nCode, WPARAM wParam, LPARAM lParam) {
-	mouseData = (MSLLHOOKSTRUCT *)lParam;
-	switch (wParam) {
-	case WM_LBUTTONDOWN:
-	
-	case WM_RBUTTONDOWN:
-	case WM_MBUTTONDOWN:
-	case WM_XBUTTONDOWN:
-	case WM_NCXBUTTONDOWN:
-	case WM_LBUTTONUP:
-	case WM_RBUTTONUP:
-	case WM_MBUTTONUP:
-	case WM_XBUTTONUP:
-	case WM_NCXBUTTONUP:
-		//send event signal to Engine
-		vKeyHandleEvent(vKeyEvent::Mouse, vKeyEventState::MouseDown, 0);
-		if (IS_DOUBLE_CODE(vCodeTable)) { //VNI
-			_syncKey.clear();
+	if (nCode >= 0) {
+		mouseData = (MSLLHOOKSTRUCT *)lParam;
+		switch (wParam) {
+		case WM_LBUTTONDOWN:
+		case WM_RBUTTONDOWN:
+		case WM_MBUTTONDOWN:
+		case WM_XBUTTONDOWN:
+		case WM_NCXBUTTONDOWN:
+		case WM_LBUTTONUP:
+		case WM_RBUTTONUP:
+		case WM_MBUTTONUP:
+		case WM_XBUTTONUP:
+		case WM_NCXBUTTONUP:
+			if (!(GetAsyncKeyState(VK_LCONTROL) & 0x8000) && !(GetAsyncKeyState(VK_RCONTROL) & 0x8000)) {
+				_flag &= ~MASK_CONTROL;
+				_lastFlag &= ~MASK_CONTROL;
+				if (GetKeyState(VK_CONTROL) < 0 || GetKeyState(VK_LCONTROL) < 0 || GetKeyState(VK_RCONTROL) < 0) {
+					INPUT inputs[2] = {};
+					inputs[0].type = INPUT_KEYBOARD;
+					inputs[0].ki.wVk = VK_LCONTROL;
+					inputs[0].ki.dwFlags = KEYEVENTF_KEYUP;
+					inputs[0].ki.dwExtraInfo = 1;
+
+					inputs[1].type = INPUT_KEYBOARD;
+					inputs[1].ki.wVk = VK_RCONTROL;
+					inputs[1].ki.dwFlags = KEYEVENTF_KEYUP;
+					inputs[1].ki.dwExtraInfo = 1;
+
+					SendInput(2, inputs, sizeof(INPUT));
+				}
+			}
+			if (!(GetAsyncKeyState(VK_LSHIFT) & 0x8000) && !(GetAsyncKeyState(VK_RSHIFT) & 0x8000)) {
+				_flag &= ~MASK_SHIFT;
+			}
+			if (!(GetAsyncKeyState(VK_LMENU) & 0x8000) && !(GetAsyncKeyState(VK_RMENU) & 0x8000)) {
+				_flag &= ~MASK_ALT;
+			}
+			if (!(GetAsyncKeyState(VK_LWIN) & 0x8000) && !(GetAsyncKeyState(VK_RWIN) & 0x8000)) {
+				_flag &= ~MASK_WIN;
+			}
+
+			//send event signal to Engine
+			vKeyHandleEvent(vKeyEvent::Mouse, vKeyEventState::MouseDown, 0);
+			if (IS_DOUBLE_CODE(vCodeTable)) { //VNI
+				_syncKey.clear();
+			}
+			break;
 		}
-		break;
 	}
 	return CallNextHookEx(hMouseHook, nCode, wParam, lParam);
 }
 
 VOID CALLBACK winEventProcCallback(HWINEVENTHOOK hWinEventHook, DWORD dwEvent, HWND hwnd, LONG idObject, LONG idChild, DWORD dwEventThread, DWORD dwmsEventTime) {
-	// resync modifier flags from actual key state to avoid stale _flag after alt-tabbing from fullscreen games
-	_flag = 0;
-	if (GetKeyState(VK_LSHIFT) < 0 || GetKeyState(VK_RSHIFT) < 0) _flag |= MASK_SHIFT;
-	if (GetKeyState(VK_LCONTROL) < 0 || GetKeyState(VK_RCONTROL) < 0) _flag |= MASK_CONTROL;
-	if (GetKeyState(VK_LMENU) < 0 || GetKeyState(VK_RMENU) < 0) _flag |= MASK_ALT;
-	if (GetKeyState(VK_LWIN) < 0 || GetKeyState(VK_RWIN) < 0) _flag |= MASK_WIN;
-	if (GetKeyState(VK_CAPITAL) == 1) _flag |= MASK_CAPITAL;
+	// resync modifier flags from actual key state to avoid stale _flag after switching windows/tabs
+	SyncModifierFlags();
 	_lastFlag = 0;
+	if (!(GetAsyncKeyState(VK_LCONTROL) & 0x8000) && !(GetAsyncKeyState(VK_RCONTROL) & 0x8000)) {
+		if (GetKeyState(VK_CONTROL) < 0 || GetKeyState(VK_LCONTROL) < 0 || GetKeyState(VK_RCONTROL) < 0) {
+			INPUT inputs[2] = {};
+			inputs[0].type = INPUT_KEYBOARD;
+			inputs[0].ki.wVk = VK_LCONTROL;
+			inputs[0].ki.dwFlags = KEYEVENTF_KEYUP;
+			inputs[0].ki.dwExtraInfo = 1;
+
+			inputs[1].type = INPUT_KEYBOARD;
+			inputs[1].ki.wVk = VK_RCONTROL;
+			inputs[1].ki.dwFlags = KEYEVENTF_KEYUP;
+			inputs[1].ki.dwExtraInfo = 1;
+
+			SendInput(2, inputs, sizeof(INPUT));
+		}
+	}
 	//smart switch key
 	if (vUseSmartSwitchKey || vRememberCode) {
 		string& exe = OpenKeyHelper::getFrontMostAppExecuteName();

@@ -8,8 +8,8 @@
       "args": [],
       "stopAtEntry": false,
       "externalConsole": true,
-      "cwd": "c:/Users/Admin/source/repos/ghostminhtoan/openkey/Sources/OpenKey/engine",
-      "program": "c:/Users/Admin/source/repos/ghostminhtoan/openkey/Sources/OpenKey/engine/build/Debug/outDebug",
+      "cwd": "c:/Users/Admin/source/repos/ghostminhtoan/openkey/Sources/OpenKey/win32/OpenKey/OpenKey",
+      "program": "c:/Users/Admin/source/repos/ghostminhtoan/openkey/Sources/OpenKey/win32/OpenKey/OpenKey/build/Debug/outDebug",
       "MIMode": "gdb",
       "miDebuggerPath": "gdb",
       "setupCommands": [

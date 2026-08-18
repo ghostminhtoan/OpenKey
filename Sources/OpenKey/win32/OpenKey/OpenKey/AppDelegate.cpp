@@ -23,7 +23,7 @@ int vCodeTable = 0;
 int vCheckSpelling = 1;
 int vUseModernOrthography = 1;
 int vQuickTelex = 0;
-#define DEFAULT_SWITCH_STATUS 0x5A00025A //default option + z
+#define DEFAULT_SWITCH_STATUS 0x5A00825A //default option + z with beep
 int vSwitchKeyStatus = DEFAULT_SWITCH_STATUS;
 int vRestoreIfWrongSpelling = 1;
 int vFixRecommendBrowser = 0;
@@ -212,13 +212,8 @@ void AppDelegate::onDefaultConfig() {
 void AppDelegate::onToggleVietnamese() {
 	APP_SET_DATA(vLanguage, vLanguage ? 0 : 1);
 	if (HAS_BEEP(vSwitchKeyStatus)) {
-		if (vLanguage) { // chuyển sang VI: trầm → bổng
-			Beep(500, 80);
-			Beep(900, 80);
-		} else { // chuyển sang EN: bổng → trầm
-			Beep(900, 80);
-			Beep(500, 80);
-		}
+		Beep(vLanguage ? 1000 : 400, 80);
+		Beep(vLanguage ? 1400 : 300, 80);
 	}
 	if (mainDialog) {
 		mainDialog->fillData();
