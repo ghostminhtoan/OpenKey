@@ -553,8 +553,13 @@ void switchLanguage() {
 	else
 		vLanguage = 0;
 	if (HAS_BEEP(vSwitchKeyStatus)) {
-		Beep(vLanguage ? 1000 : 400, 80);
-		Beep(vLanguage ? 1400 : 300, 80);
+		if (vLanguage) { // chuyển sang VI: trầm → bổng
+			Beep(500, 80);
+			Beep(900, 80);
+		} else { // chuyển sang EN: bổng → trầm
+			Beep(900, 80);
+			Beep(500, 80);
+		}
 	}
 	AppDelegate::getInstance()->onInputMethodChangedFromHotKey();
 	if (vUseSmartSwitchKey) {
@@ -765,8 +770,8 @@ LRESULT CALLBACK keyboardHookProcess(int nCode, WPARAM wParam, LPARAM lParam) {
 			vBlockBackslash = !vBlockBackslash;
 			APP_SET_DATA(vBlockBackslash, vBlockBackslash);
 			if (HAS_BEEP(vSwitchKeyStatus)) {
-				Beep(vBlockBackslash ? 500 : 750, 80);
-				Beep(vBlockBackslash ? 750 : 500, 80);
+				Beep(vBlockBackslash ? 200 : 350, 80);
+				Beep(vBlockBackslash ? 350 : 200, 80);
 			}
 			if (AppDelegate::getInstance()) {
 				AppDelegate::getInstance()->onInputMethodChangedFromHotKey();
