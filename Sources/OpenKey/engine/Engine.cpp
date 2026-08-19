@@ -216,6 +216,13 @@ static bool isMacroPunctuationTriggerKey(const Uint16& data, const Uint8& capsSt
     return false;
 }
 
+static bool isPunctuationWordBreak(const Uint16& data) {
+    return data == KEY_DOT || data == KEY_COMMA || data == KEY_SLASH ||
+        data == KEY_BACK_SLASH || data == KEY_SEMICOLON || data == KEY_QUOTE ||
+        data == KEY_LEFT_BRACKET || data == KEY_RIGHT_BRACKET || data == KEY_MINUS ||
+        data == KEY_EQUALS || data == KEY_BACKQUOTE;
+}
+
 static bool canAppendCurrentKeyToMacro(const Uint16& data, const bool& isCaps) {
     return data != KEY_SPACE && keyCodeToCharacter(data | (isCaps ? CAPS_MASK : 0)) != 0;
 }
@@ -1935,7 +1942,7 @@ void vKeyHandleEvent(const vKeyEvent& event,
             hMacroKey.clear();
         } else if ((vQuickStartConsonant || vQuickEndConsonant) && !tempDisableKey && isMacroBreakCode(data)) {
             checkQuickConsonant();
-        } else if (vRestoreIfWrongSpelling && _index > 0 && isWordBreak(event, state, data)) { //restore key if wrong spelling with break-key
+        } else if (vRestoreIfWrongSpelling && _index > 0 && (data == KEY_ENTER || data == KEY_RETURN || isPunctuationWordBreak(data))) { //restore key if wrong spelling with break-key
             if (!tempDisableKey && vCheckSpelling) {
                 checkSpelling(true); //force check spelling
             }
