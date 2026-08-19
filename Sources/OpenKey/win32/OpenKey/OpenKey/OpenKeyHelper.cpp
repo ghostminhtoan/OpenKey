@@ -467,6 +467,44 @@ bool OpenKeyHelper::cycleCase() {
 	pasteInputs[3].ki.dwExtraInfo = 1;
 
 	SendInput(4, pasteInputs, sizeof(INPUT));
+	Sleep(30);
+
+	// Reselect the text (Shift + Left for each character) so repeated Shift+F3 keeps cycling
+	size_t charCount = result.size();
+	if (charCount > 0 && charCount <= 1000) {
+		vector<INPUT> selInputs;
+		selInputs.reserve(charCount * 2 + 2);
+
+		INPUT shiftDown = {};
+		shiftDown.type = INPUT_KEYBOARD;
+		shiftDown.ki.wVk = VK_SHIFT;
+		shiftDown.ki.dwExtraInfo = 1;
+		selInputs.push_back(shiftDown);
+
+		for (size_t i = 0; i < charCount; i++) {
+			INPUT leftDown = {};
+			leftDown.type = INPUT_KEYBOARD;
+			leftDown.ki.wVk = VK_LEFT;
+			leftDown.ki.dwExtraInfo = 1;
+			selInputs.push_back(leftDown);
+
+			INPUT leftUp = {};
+			leftUp.type = INPUT_KEYBOARD;
+			leftUp.ki.wVk = VK_LEFT;
+			leftUp.ki.dwFlags = KEYEVENTF_KEYUP;
+			leftUp.ki.dwExtraInfo = 1;
+			selInputs.push_back(leftUp);
+		}
+
+		INPUT shiftUp = {};
+		shiftUp.type = INPUT_KEYBOARD;
+		shiftUp.ki.wVk = VK_SHIFT;
+		shiftUp.ki.dwFlags = KEYEVENTF_KEYUP;
+		shiftUp.ki.dwExtraInfo = 1;
+		selInputs.push_back(shiftUp);
+
+		SendInput((UINT)selInputs.size(), selInputs.data(), sizeof(INPUT));
+	}
 	return true;
 }
 
