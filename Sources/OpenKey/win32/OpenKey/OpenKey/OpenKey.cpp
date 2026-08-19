@@ -621,8 +621,9 @@ static void handleMacro() {
 
 	if (pData->macroData.size() <= 100) {
 		for (size_t i = 0; i < pData->macroData.size(); i++) {
-			SendKeyCode(pData->macroData[i]);
+			QueueKeyCode(pData->macroData[i]);
 		}
+		FlushBatchInput();
 	} else {
 		// Backup clipboard
 		wstring backupText = OpenKeyHelper::getClipboardText(CF_UNICODETEXT);
