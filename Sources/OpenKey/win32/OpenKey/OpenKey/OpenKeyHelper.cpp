@@ -364,34 +364,38 @@ bool OpenKeyHelper::quickConvert() {
 }
 
 bool OpenKeyHelper::cycleCase() {
-	wstring oldClip = getClipboardText(CF_UNICODETEXT);
+	// Release physical modifier keys first
+	INPUT cleanModifiers[6] = {};
+	cleanModifiers[0].type = INPUT_KEYBOARD; cleanModifiers[0].ki.wVk = VK_LCONTROL; cleanModifiers[0].ki.dwFlags = KEYEVENTF_KEYUP; cleanModifiers[0].ki.dwExtraInfo = 1;
+	cleanModifiers[1].type = INPUT_KEYBOARD; cleanModifiers[1].ki.wVk = VK_RCONTROL; cleanModifiers[1].ki.dwFlags = KEYEVENTF_KEYUP; cleanModifiers[1].ki.dwExtraInfo = 1;
+	cleanModifiers[2].type = INPUT_KEYBOARD; cleanModifiers[2].ki.wVk = VK_LMENU; cleanModifiers[2].ki.dwFlags = KEYEVENTF_KEYUP; cleanModifiers[2].ki.dwExtraInfo = 1;
+	cleanModifiers[3].type = INPUT_KEYBOARD; cleanModifiers[3].ki.wVk = VK_RMENU; cleanModifiers[3].ki.dwFlags = KEYEVENTF_KEYUP; cleanModifiers[3].ki.dwExtraInfo = 1;
+	cleanModifiers[4].type = INPUT_KEYBOARD; cleanModifiers[4].ki.wVk = VK_LSHIFT; cleanModifiers[4].ki.dwFlags = KEYEVENTF_KEYUP; cleanModifiers[4].ki.dwExtraInfo = 1;
+	cleanModifiers[5].type = INPUT_KEYBOARD; cleanModifiers[5].ki.wVk = VK_RSHIFT; cleanModifiers[5].ki.dwFlags = KEYEVENTF_KEYUP; cleanModifiers[5].ki.dwExtraInfo = 1;
+	SendInput(6, cleanModifiers, sizeof(INPUT));
+	Sleep(20);
 
-	// Send Ctrl+C to copy current selection
+	// Empty clipboard and copy selection
+	if (OpenClipboard(nullptr)) {
+		EmptyClipboard();
+		CloseClipboard();
+	}
+
 	INPUT copyInputs[4] = {};
-	copyInputs[0].type = INPUT_KEYBOARD;
-	copyInputs[0].ki.wVk = VK_CONTROL;
-	copyInputs[0].ki.dwFlags = 0;
-	copyInputs[0].ki.dwExtraInfo = 1;
-
-	copyInputs[1].type = INPUT_KEYBOARD;
-	copyInputs[1].ki.wVk = 'C';
-	copyInputs[1].ki.dwFlags = 0;
-	copyInputs[1].ki.dwExtraInfo = 1;
-
-	copyInputs[2].type = INPUT_KEYBOARD;
-	copyInputs[2].ki.wVk = 'C';
-	copyInputs[2].ki.dwFlags = KEYEVENTF_KEYUP;
-	copyInputs[2].ki.dwExtraInfo = 1;
-
-	copyInputs[3].type = INPUT_KEYBOARD;
-	copyInputs[3].ki.wVk = VK_CONTROL;
-	copyInputs[3].ki.dwFlags = KEYEVENTF_KEYUP;
-	copyInputs[3].ki.dwExtraInfo = 1;
-
+	copyInputs[0].type = INPUT_KEYBOARD; copyInputs[0].ki.wVk = VK_CONTROL; copyInputs[0].ki.dwFlags = 0; copyInputs[0].ki.dwExtraInfo = 1;
+	copyInputs[1].type = INPUT_KEYBOARD; copyInputs[1].ki.wVk = 'C'; copyInputs[1].ki.dwFlags = 0; copyInputs[1].ki.dwExtraInfo = 1;
+	copyInputs[2].type = INPUT_KEYBOARD; copyInputs[2].ki.wVk = 'C'; copyInputs[2].ki.dwFlags = KEYEVENTF_KEYUP; copyInputs[2].ki.dwExtraInfo = 1;
+	copyInputs[3].type = INPUT_KEYBOARD; copyInputs[3].ki.wVk = VK_CONTROL; copyInputs[3].ki.dwFlags = KEYEVENTF_KEYUP; copyInputs[3].ki.dwExtraInfo = 1;
 	SendInput(4, copyInputs, sizeof(INPUT));
-	Sleep(60);
 
-	wstring selectedText = getClipboardText(CF_UNICODETEXT);
+	// Wait up to 100ms for clipboard to receive copied selection
+	wstring selectedText = L"";
+	for (int retry = 0; retry < 10; retry++) {
+		Sleep(10);
+		selectedText = getClipboardText(CF_UNICODETEXT);
+		if (!selectedText.empty()) break;
+	}
+
 	if (selectedText.empty()) {
 		return false;
 	}
@@ -442,58 +446,22 @@ bool OpenKeyHelper::cycleCase() {
 	}
 
 	setClipboardText(result.c_str(), (int)result.size() + 1, CF_UNICODETEXT);
-	Sleep(20);
+	Sleep(30);
 
 	// Paste back: Send Ctrl+V
 	INPUT pasteInputs[4] = {};
-	pasteInputs[0].type = INPUT_KEYBOARD;
-	pasteInputs[0].ki.wVk = VK_CONTROL;
-	pasteInputs[0].ki.dwFlags = 0;
-	pasteInputs[0].ki.dwExtraInfo = 1;
-
-	pasteInputs[1].type = INPUT_KEYBOARD;
-	pasteInputs[1].ki.wVk = 'V';
-	pasteInputs[1].ki.dwFlags = 0;
-	pasteInputs[1].ki.dwExtraInfo = 1;
-
-	pasteInputs[2].type = INPUT_KEYBOARD;
-	pasteInputs[2].ki.wVk = 'V';
-	pasteInputs[2].ki.dwFlags = KEYEVENTF_KEYUP;
-	pasteInputs[2].ki.dwExtraInfo = 1;
-
-	pasteInputs[3].type = INPUT_KEYBOARD;
-	pasteInputs[3].ki.wVk = VK_CONTROL;
-	pasteInputs[3].ki.dwFlags = KEYEVENTF_KEYUP;
-	pasteInputs[3].ki.dwExtraInfo = 1;
-
+	pasteInputs[0].type = INPUT_KEYBOARD; pasteInputs[0].ki.wVk = VK_CONTROL; pasteInputs[0].ki.dwFlags = 0; pasteInputs[0].ki.dwExtraInfo = 1;
+	pasteInputs[1].type = INPUT_KEYBOARD; pasteInputs[1].ki.wVk = 'V'; pasteInputs[1].ki.dwFlags = 0; pasteInputs[1].ki.dwExtraInfo = 1;
+	pasteInputs[2].type = INPUT_KEYBOARD; pasteInputs[2].ki.wVk = 'V'; pasteInputs[2].ki.dwFlags = KEYEVENTF_KEYUP; pasteInputs[2].ki.dwExtraInfo = 1;
+	pasteInputs[3].type = INPUT_KEYBOARD; pasteInputs[3].ki.wVk = VK_CONTROL; pasteInputs[3].ki.dwFlags = KEYEVENTF_KEYUP; pasteInputs[3].ki.dwExtraInfo = 1;
 	SendInput(4, pasteInputs, sizeof(INPUT));
-	Sleep(60);
+	Sleep(50);
 
-	// Reselect the text so repeated Shift+F3 keeps cycling
-	// First ensure Ctrl and Alt are released
-	INPUT cleanModifiers[4] = {};
-	cleanModifiers[0].type = INPUT_KEYBOARD;
-	cleanModifiers[0].ki.wVk = VK_CONTROL;
-	cleanModifiers[0].ki.dwFlags = KEYEVENTF_KEYUP;
-	cleanModifiers[0].ki.dwExtraInfo = 1;
-
-	cleanModifiers[1].type = INPUT_KEYBOARD;
-	cleanModifiers[1].ki.wVk = VK_MENU;
-	cleanModifiers[1].ki.dwFlags = KEYEVENTF_KEYUP;
-	cleanModifiers[1].ki.dwExtraInfo = 1;
-
-	cleanModifiers[2].type = INPUT_KEYBOARD;
-	cleanModifiers[2].ki.wVk = VK_LSHIFT;
-	cleanModifiers[2].ki.dwFlags = KEYEVENTF_KEYUP;
-	cleanModifiers[2].ki.dwExtraInfo = 1;
-
-	cleanModifiers[3].type = INPUT_KEYBOARD;
-	cleanModifiers[3].ki.wVk = VK_RSHIFT;
-	cleanModifiers[3].ki.dwFlags = KEYEVENTF_KEYUP;
-	cleanModifiers[3].ki.dwExtraInfo = 1;
-	SendInput(4, cleanModifiers, sizeof(INPUT));
+	// Ensure modifier keys released before reselecting
+	SendInput(6, cleanModifiers, sizeof(INPUT));
 	Sleep(20);
 
+	// Reselect the pasted text using Shift + Left Arrow
 	size_t charCount = result.size();
 	if (charCount > 0 && charCount <= 1000) {
 		vector<INPUT> selInputs;
@@ -502,7 +470,6 @@ bool OpenKeyHelper::cycleCase() {
 		INPUT shiftDown = {};
 		shiftDown.type = INPUT_KEYBOARD;
 		shiftDown.ki.wVk = VK_SHIFT;
-		shiftDown.ki.dwFlags = 0;
 		shiftDown.ki.dwExtraInfo = 1;
 		selInputs.push_back(shiftDown);
 
@@ -510,7 +477,6 @@ bool OpenKeyHelper::cycleCase() {
 			INPUT leftDown = {};
 			leftDown.type = INPUT_KEYBOARD;
 			leftDown.ki.wVk = VK_LEFT;
-			leftDown.ki.dwFlags = 0;
 			leftDown.ki.dwExtraInfo = 1;
 			selInputs.push_back(leftDown);
 

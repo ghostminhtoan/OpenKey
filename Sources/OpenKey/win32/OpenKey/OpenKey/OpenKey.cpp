@@ -1143,14 +1143,16 @@ VOID CALLBACK winEventProcCallback(HWINEVENTHOOK hWinEventHook, DWORD dwEvent, H
 			return;
 		_languageTemp = getAppInputMethodStatus(exe, vLanguage | (vCodeTable << 1));
 		vTempOffEngine(false);
-		if (vUseSmartSwitchKey && (_languageTemp & 0x01) != vLanguage) {
-			if (_languageTemp != -1) {
-				vLanguage = _languageTemp;
-				ShowCaretOverlay(vLanguage == 1);
-				AppDelegate::getInstance()->onInputMethodChangedFromHotKey();
-			} else {
-				saveSmartSwitchKeyData();
+		if (vUseSmartSwitchKey) {
+			if ((_languageTemp & 0x01) != vLanguage) {
+				if (_languageTemp != -1) {
+					vLanguage = _languageTemp;
+					AppDelegate::getInstance()->onInputMethodChangedFromHotKey();
+				} else {
+					saveSmartSwitchKeyData();
+				}
 			}
+			ShowCaretOverlay(vLanguage == 1);
 		}
 		startNewSession();
 		if (vRememberCode && (_languageTemp >> 1) != vCodeTable) { //for remember table code feature
