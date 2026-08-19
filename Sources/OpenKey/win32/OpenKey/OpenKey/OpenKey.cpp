@@ -619,7 +619,16 @@ static void handleMacro() {
 		}
 	}
 
-	if (pData->macroData.size() <= 100) {
+	size_t newlineCount = 0;
+	for (size_t i = 0; i < pData->macroData.size(); i++) {
+		Uint32 d = pData->macroData[i];
+		Uint32 ch = (d & PURE_CHARACTER_MASK) ? (d & ~PURE_CHARACTER_MASK) : ((d & CHAR_CODE_MASK) ? (d & ~CHAR_CODE_MASK) : d);
+		if (ch == '\n' || ch == KEY_ENTER || ch == KEY_RETURN) {
+			newlineCount++;
+		}
+	}
+
+	if (newlineCount < 2) {
 		for (size_t i = 0; i < pData->macroData.size(); i++) {
 			QueueKeyCode(pData->macroData[i]);
 		}
