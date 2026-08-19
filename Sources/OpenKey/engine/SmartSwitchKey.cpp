@@ -51,6 +51,24 @@ void getSmartSwitchKeySaveData(vector<Byte>& outData) {
     }
 }
 
+#include <algorithm>
+
+static bool isExcludedApp(string name) {
+    std::transform(name.begin(), name.end(), name.begin(), [](unsigned char ch) { return std::tolower(ch); });
+    static const vector<string> excludedList = {
+        "cmd.exe", "powershell.exe", "pwsh.exe", "windowsterminal.exe", "wt.exe",
+        "mintty.exe", "bash.exe", "git-bash.exe", "conhost.exe", "alacritty.exe", "wezterm-gui.exe",
+        "code.exe", "devenv.exe", "clion64.exe", "idea64.exe", "pycharm64.exe",
+        "webstorm64.exe", "rider64.exe", "sublime_text.exe", "notepad++.exe",
+        "steam.exe", "epicgameslauncher.exe", "league of legends.exe", "valorant.exe",
+        "csgo.exe", "cs2.exe", "dota2.exe", "gta5.exe", "overwatch.exe"
+    };
+    for (size_t i = 0; i < excludedList.size(); i++) {
+        if (name == excludedList[i]) return true;
+    }
+    return false;
+}
+
 int getAppInputMethodStatus(const string& bundleId, const int& currentInputMethod) {
     if (_cacheKey.compare(bundleId) == 0) {
         return _cacheData;
@@ -61,9 +79,9 @@ int getAppInputMethodStatus(const string& bundleId, const int& currentInputMetho
         return _cacheData;
     }
     _cacheKey = bundleId;
-    _cacheData = currentInputMethod;
+    _cacheData = isExcludedApp(bundleId) ? 0 : currentInputMethod;
     _smartSwitchKeyData[bundleId] = _cacheData;
-    return -1;
+    return _cacheData;
 }
 
 void setAppInputMethodStatus(const string& bundleId, const int& language) {
@@ -71,3 +89,4 @@ void setAppInputMethodStatus(const string& bundleId, const int& language) {
     _cacheKey = bundleId;
     _cacheData = language;
 }
+

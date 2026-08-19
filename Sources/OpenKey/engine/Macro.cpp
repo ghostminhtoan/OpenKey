@@ -187,6 +187,29 @@ static bool modifyCaseUnicode(Uint32& code, const bool& isUpperCase=true) {
     return false;
 }
 
+static bool findBuiltinEmoji(const string& text, vector<Uint32>& outCodes) {
+    static const map<string, string> emojiTable = {
+        {"smile", u8"😄"}, {"heart", u8"❤️"}, {"laugh", u8"😂"}, {"rofl", u8"🤣"},
+        {"joy", u8"😂"}, {"sob", u8"😭"}, {"wink", u8"😉"}, {"blush", u8"😊"},
+        {"cool", u8"😎"}, {"fire", u8"🔥"}, {"star", u8"⭐"}, {"sparkles", u8"✨"},
+        {"thumbsup", u8"👍"}, {"+1", u8"👍"}, {"thumbsdown", u8"👎"}, {"-1", u8"👎"},
+        {"clap", u8"👏"}, {"pray", u8"🙏"}, {"check", u8"✅"}, {"cross", u8"❌"},
+        {"party", u8"🎉"}, {"tada", u8"🎉"}, {"rocket", u8"🚀"}, {"eyes", u8"👀"},
+        {"ok", u8"👌"}, {"v", u8"✌️"}, {"100", u8"💯"}, {"bulb", u8"💡"},
+        {"warning", u8"⚠️"}, {"sun", u8"☀️"}, {"moon", u8"🌙"}, {"coffee", u8"☕"}
+    };
+    string query = text;
+    if (query.size() >= 2 && query.front() == ':' && query.back() == ':') {
+        query = query.substr(1, query.size() - 2);
+    }
+    auto it = emojiTable.find(query);
+    if (it != emojiTable.end()) {
+        convert(it->second, outCodes);
+        return true;
+    }
+    return false;
+}
+
 bool findMacro(vector<Uint32>& key, vector<Uint32>& macroContentCode) {
     for (c = 0; c < key.size(); c++) {
         key[c] = getCharacterCode(key[c]);
@@ -195,6 +218,17 @@ bool findMacro(vector<Uint32>& key, vector<Uint32>& macroContentCode) {
         macroContentCode.clear();
         MacroData data = macroMap[key];
         macroContentCode = data.macroContentCode;
+        return true;
+    }
+    // Check built-in emoji
+    string keyStr;
+    for (size_t i = 0; i < key.size(); i++) {
+        Uint16 ch = keyCodeToCharacter(key[i]);
+        if (ch != 0) {
+            keyStr += (char)tolower(ch);
+        }
+    }
+    if (!keyStr.empty() && findBuiltinEmoji(keyStr, macroContentCode)) {
         return true;
     }
     if (vAutoCapsMacro) {

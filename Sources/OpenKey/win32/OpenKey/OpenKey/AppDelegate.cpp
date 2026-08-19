@@ -23,7 +23,7 @@ int vCodeTable = 0;
 int vCheckSpelling = 1;
 int vUseModernOrthography = 1;
 int vQuickTelex = 0;
-#define DEFAULT_SWITCH_STATUS 0x5A00825A //default option + z with beep
+#define DEFAULT_SWITCH_STATUS 0xFE0009FE //default Ctrl + Shift
 int vSwitchKeyStatus = DEFAULT_SWITCH_STATUS;
 int vRestoreIfWrongSpelling = 1;
 int vFixRecommendBrowser = 0;
