@@ -467,9 +467,33 @@ bool OpenKeyHelper::cycleCase() {
 	pasteInputs[3].ki.dwExtraInfo = 1;
 
 	SendInput(4, pasteInputs, sizeof(INPUT));
-	Sleep(30);
+	Sleep(60);
 
-	// Reselect the text (Shift + Left for each character) so repeated Shift+F3 keeps cycling
+	// Reselect the text so repeated Shift+F3 keeps cycling
+	// First ensure Ctrl and Alt are released
+	INPUT cleanModifiers[4] = {};
+	cleanModifiers[0].type = INPUT_KEYBOARD;
+	cleanModifiers[0].ki.wVk = VK_CONTROL;
+	cleanModifiers[0].ki.dwFlags = KEYEVENTF_KEYUP;
+	cleanModifiers[0].ki.dwExtraInfo = 1;
+
+	cleanModifiers[1].type = INPUT_KEYBOARD;
+	cleanModifiers[1].ki.wVk = VK_MENU;
+	cleanModifiers[1].ki.dwFlags = KEYEVENTF_KEYUP;
+	cleanModifiers[1].ki.dwExtraInfo = 1;
+
+	cleanModifiers[2].type = INPUT_KEYBOARD;
+	cleanModifiers[2].ki.wVk = VK_LSHIFT;
+	cleanModifiers[2].ki.dwFlags = KEYEVENTF_KEYUP;
+	cleanModifiers[2].ki.dwExtraInfo = 1;
+
+	cleanModifiers[3].type = INPUT_KEYBOARD;
+	cleanModifiers[3].ki.wVk = VK_RSHIFT;
+	cleanModifiers[3].ki.dwFlags = KEYEVENTF_KEYUP;
+	cleanModifiers[3].ki.dwExtraInfo = 1;
+	SendInput(4, cleanModifiers, sizeof(INPUT));
+	Sleep(20);
+
 	size_t charCount = result.size();
 	if (charCount > 0 && charCount <= 1000) {
 		vector<INPUT> selInputs;
@@ -478,6 +502,7 @@ bool OpenKeyHelper::cycleCase() {
 		INPUT shiftDown = {};
 		shiftDown.type = INPUT_KEYBOARD;
 		shiftDown.ki.wVk = VK_SHIFT;
+		shiftDown.ki.dwFlags = 0;
 		shiftDown.ki.dwExtraInfo = 1;
 		selInputs.push_back(shiftDown);
 
@@ -485,6 +510,7 @@ bool OpenKeyHelper::cycleCase() {
 			INPUT leftDown = {};
 			leftDown.type = INPUT_KEYBOARD;
 			leftDown.ki.wVk = VK_LEFT;
+			leftDown.ki.dwFlags = 0;
 			leftDown.ki.dwExtraInfo = 1;
 			selInputs.push_back(leftDown);
 
