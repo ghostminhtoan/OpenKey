@@ -144,26 +144,49 @@ static void ShowCaretOverlay(bool isVietnamese) {
 
 	POINT pt = { 0, 0 };
 	HWND fg = GetForegroundWindow();
-	DWORD threadId = GetWindowThreadProcessId(fg, NULL);
-	GUITHREADINFO gti = { sizeof(GUITHREADINFO) };
+	bool foundPos = false;
 
-	if (GetGUIThreadInfo(threadId, &gti) && gti.hwndCaret) {
-		pt.x = gti.rcCaret.left;
-		pt.y = gti.rcCaret.bottom + 2;
-		ClientToScreen(gti.hwndCaret, &pt);
-	} else {
+	if (fg) {
+		DWORD threadId = GetWindowThreadProcessId(fg, NULL);
+		GUITHREADINFO gti = { sizeof(GUITHREADINFO) };
+
+		if (GetGUIThreadInfo(threadId, &gti)) {
+			if (gti.hwndCaret && (gti.rcCaret.right > gti.rcCaret.left || gti.rcCaret.bottom > gti.rcCaret.top)) {
+				pt.x = gti.rcCaret.left;
+				pt.y = gti.rcCaret.bottom + 4;
+				ClientToScreen(gti.hwndCaret, &pt);
+				foundPos = true;
+			} else if (gti.hwndFocus) {
+				RECT focusRect;
+				GetWindowRect(gti.hwndFocus, &focusRect);
+				pt.x = focusRect.left + 16;
+				pt.y = focusRect.top + 16;
+				foundPos = true;
+			}
+		}
+
+		if (!foundPos) {
+			RECT winRect;
+			GetWindowRect(fg, &winRect);
+			pt.x = winRect.left + 24;
+			pt.y = winRect.top + 32;
+			foundPos = true;
+		}
+	}
+
+	if (!foundPos) {
 		GetCursorPos(&pt);
 		pt.x += 12;
 		pt.y += 18;
 	}
 
-	SetWindowPos(hOverlayWnd, HWND_TOPMOST, pt.x, pt.y, 22, 18, SWP_SHOWWINDOW | SWP_NOACTIVATE);
+	SetWindowPos(hOverlayWnd, HWND_TOPMOST, pt.x, pt.y, 24, 20, SWP_SHOWWINDOW | SWP_NOACTIVATE);
 	InvalidateRect(hOverlayWnd, NULL, TRUE);
 
 	if (overlayTimerId) {
 		KillTimer(hOverlayWnd, overlayTimerId);
 	}
-	overlayTimerId = SetTimer(hOverlayWnd, 1, 900, NULL);
+	overlayTimerId = SetTimer(hOverlayWnd, 1, 1600, NULL);
 }
 
 static vector<Uint16> _newCharString;
