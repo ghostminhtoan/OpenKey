@@ -41,6 +41,7 @@ public:
 	static void setClipboardText(LPCTSTR data, const int& len, const int& type);
 
 	static bool quickConvert();
+	static bool cycleCase();
 
 	static DWORD getVersionNumber();
 	static wstring getVersionString();

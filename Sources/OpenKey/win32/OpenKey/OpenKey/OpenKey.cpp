@@ -75,6 +75,97 @@ static inline void SyncModifierFlags() {
 	else _flag &= ~MASK_SCROLL;
 }
 
+static HWND hOverlayWnd = NULL;
+static UINT_PTR overlayTimerId = 0;
+static wstring overlayText = L"";
+
+static LRESULT CALLBACK OverlayWndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
+	if (msg == WM_PAINT) {
+		PAINTSTRUCT ps;
+		HDC hdc = BeginPaint(hWnd, &ps);
+		RECT rc;
+		GetClientRect(hWnd, &rc);
+
+		HBRUSH bgBrush = CreateSolidBrush(RGB(30, 30, 30));
+		FillRect(hdc, &rc, bgBrush);
+		DeleteObject(bgBrush);
+
+		HPEN borderPen = CreatePen(PS_SOLID, 1, RGB(0, 150, 255));
+		HGDIOBJ oldPen = SelectObject(hdc, borderPen);
+		HGDIOBJ oldBrush = SelectObject(hdc, GetStockObject(NULL_BRUSH));
+		Rectangle(hdc, rc.left, rc.top, rc.right, rc.bottom);
+		SelectObject(hdc, oldPen);
+		SelectObject(hdc, oldBrush);
+		DeleteObject(borderPen);
+
+		SetBkMode(hdc, TRANSPARENT);
+		SetTextColor(hdc, RGB(255, 255, 255));
+		HFONT hFont = CreateFont(13, 0, 0, 0, FW_BOLD, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY, DEFAULT_PITCH, _T("Segoe UI"));
+		HGDIOBJ oldFont = SelectObject(hdc, hFont);
+
+		DrawText(hdc, overlayText.c_str(), -1, &rc, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+
+		SelectObject(hdc, oldFont);
+		DeleteObject(hFont);
+		EndPaint(hWnd, &ps);
+		return 0;
+	} else if (msg == WM_TIMER) {
+		KillTimer(hWnd, wParam);
+		ShowWindow(hWnd, SW_HIDE);
+		return 0;
+	}
+	return DefWindowProc(hWnd, msg, wParam, lParam);
+}
+
+static void InitCaretOverlay() {
+	if (hOverlayWnd) return;
+	WNDCLASS wc = { 0 };
+	wc.lpfnWndProc = OverlayWndProc;
+	wc.hInstance = GetModuleHandle(NULL);
+	wc.lpszClassName = _T("OpenKeyCaretOverlay");
+	RegisterClass(&wc);
+
+	hOverlayWnd = CreateWindowEx(
+		WS_EX_TOPMOST | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE | WS_EX_LAYERED,
+		_T("OpenKeyCaretOverlay"), _T(""),
+		WS_POPUP, 0, 0, 24, 18,
+		NULL, NULL, GetModuleHandle(NULL), NULL
+	);
+	if (hOverlayWnd) {
+		SetLayeredWindowAttributes(hOverlayWnd, 0, 225, LWA_ALPHA);
+	}
+}
+
+static void ShowCaretOverlay(bool isVietnamese) {
+	if (!hOverlayWnd) InitCaretOverlay();
+	if (!hOverlayWnd) return;
+
+	overlayText = isVietnamese ? L"V" : L"E";
+
+	POINT pt = { 0, 0 };
+	HWND fg = GetForegroundWindow();
+	DWORD threadId = GetWindowThreadProcessId(fg, NULL);
+	GUITHREADINFO gti = { sizeof(GUITHREADINFO) };
+
+	if (GetGUIThreadInfo(threadId, &gti) && gti.hwndCaret) {
+		pt.x = gti.rcCaret.left;
+		pt.y = gti.rcCaret.bottom + 2;
+		ClientToScreen(gti.hwndCaret, &pt);
+	} else {
+		GetCursorPos(&pt);
+		pt.x += 12;
+		pt.y += 18;
+	}
+
+	SetWindowPos(hOverlayWnd, HWND_TOPMOST, pt.x, pt.y, 22, 18, SWP_SHOWWINDOW | SWP_NOACTIVATE);
+	InvalidateRect(hOverlayWnd, NULL, TRUE);
+
+	if (overlayTimerId) {
+		KillTimer(hOverlayWnd, overlayTimerId);
+	}
+	overlayTimerId = SetTimer(hOverlayWnd, 1, 900, NULL);
+}
+
 static vector<Uint16> _newCharString;
 static Uint16 _newCharSize;
 static bool _willSendControlKey = false;
@@ -568,6 +659,7 @@ void switchLanguage() {
 		vLanguage = 1;
 	else
 		vLanguage = 0;
+	ShowCaretOverlay(vLanguage == 1);
 	if (HAS_BEEP(vSwitchKeyStatus)) {
 		Beep(vLanguage ? 1000 : 400, 100);
 	}
@@ -814,6 +906,14 @@ LRESULT CALLBACK keyboardHookProcess(int nCode, WPARAM wParam, LPARAM lParam) {
 			_keycode = 0;
 			return -1;
 		}
+		// Cycle Case shortcut: Shift + F3 or Ctrl + Alt + U
+		if ((_keycode == VK_F3 && (_flag & MASK_SHIFT)) ||
+			((_keycode == 'U' || _keycode == 'u') && (_flag & MASK_CONTROL) && (_flag & MASK_ALT))) {
+			OpenKeyHelper::cycleCase();
+			_hasJustUsedHotKey = true;
+			_keycode = 0;
+			return -1;
+		}
 		if (GET_SWITCH_KEY(vSwitchKeyStatus) != _keycode && GET_SWITCH_KEY(convertToolHotKey) != _keycode) {
 			_lastFlag = 0;
 		} else {
@@ -1046,6 +1146,7 @@ VOID CALLBACK winEventProcCallback(HWINEVENTHOOK hWinEventHook, DWORD dwEvent, H
 		if (vUseSmartSwitchKey && (_languageTemp & 0x01) != vLanguage) {
 			if (_languageTemp != -1) {
 				vLanguage = _languageTemp;
+				ShowCaretOverlay(vLanguage == 1);
 				AppDelegate::getInstance()->onInputMethodChangedFromHotKey();
 			} else {
 				saveSmartSwitchKeyData();

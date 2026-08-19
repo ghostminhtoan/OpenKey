@@ -363,6 +363,113 @@ bool OpenKeyHelper::quickConvert() {
 	return true;
 }
 
+bool OpenKeyHelper::cycleCase() {
+	wstring oldClip = getClipboardText(CF_UNICODETEXT);
+
+	// Send Ctrl+C to copy current selection
+	INPUT copyInputs[4] = {};
+	copyInputs[0].type = INPUT_KEYBOARD;
+	copyInputs[0].ki.wVk = VK_CONTROL;
+	copyInputs[0].ki.dwFlags = 0;
+	copyInputs[0].ki.dwExtraInfo = 1;
+
+	copyInputs[1].type = INPUT_KEYBOARD;
+	copyInputs[1].ki.wVk = 'C';
+	copyInputs[1].ki.dwFlags = 0;
+	copyInputs[1].ki.dwExtraInfo = 1;
+
+	copyInputs[2].type = INPUT_KEYBOARD;
+	copyInputs[2].ki.wVk = 'C';
+	copyInputs[2].ki.dwFlags = KEYEVENTF_KEYUP;
+	copyInputs[2].ki.dwExtraInfo = 1;
+
+	copyInputs[3].type = INPUT_KEYBOARD;
+	copyInputs[3].ki.wVk = VK_CONTROL;
+	copyInputs[3].ki.dwFlags = KEYEVENTF_KEYUP;
+	copyInputs[3].ki.dwExtraInfo = 1;
+
+	SendInput(4, copyInputs, sizeof(INPUT));
+	Sleep(60);
+
+	wstring selectedText = getClipboardText(CF_UNICODETEXT);
+	if (selectedText.empty()) {
+		return false;
+	}
+
+	bool isAllLower = true;
+	bool isAllUpper = true;
+	bool hasLetter = false;
+
+	for (size_t i = 0; i < selectedText.size(); i++) {
+		wchar_t c = selectedText[i];
+		if (iswalpha(c)) {
+			hasLetter = true;
+			if (iswlower(c)) isAllUpper = false;
+			if (iswupper(c)) isAllLower = false;
+		}
+	}
+
+	if (!hasLetter) {
+		return false;
+	}
+
+	wstring result = selectedText;
+	if (isAllLower) {
+		// lower -> UPPER
+		for (size_t i = 0; i < result.size(); i++) {
+			result[i] = towupper(result[i]);
+		}
+	} else if (isAllUpper) {
+		// UPPER -> Title Case
+		bool newWord = true;
+		for (size_t i = 0; i < result.size(); i++) {
+			if (iswalpha(result[i])) {
+				if (newWord) {
+					result[i] = towupper(result[i]);
+					newWord = false;
+				} else {
+					result[i] = towlower(result[i]);
+				}
+			} else {
+				newWord = true;
+			}
+		}
+	} else {
+		// Title Case / Mixed -> lowercase
+		for (size_t i = 0; i < result.size(); i++) {
+			result[i] = towlower(result[i]);
+		}
+	}
+
+	setClipboardText(result.c_str(), (int)result.size() + 1, CF_UNICODETEXT);
+	Sleep(20);
+
+	// Paste back: Send Ctrl+V
+	INPUT pasteInputs[4] = {};
+	pasteInputs[0].type = INPUT_KEYBOARD;
+	pasteInputs[0].ki.wVk = VK_CONTROL;
+	pasteInputs[0].ki.dwFlags = 0;
+	pasteInputs[0].ki.dwExtraInfo = 1;
+
+	pasteInputs[1].type = INPUT_KEYBOARD;
+	pasteInputs[1].ki.wVk = 'V';
+	pasteInputs[1].ki.dwFlags = 0;
+	pasteInputs[1].ki.dwExtraInfo = 1;
+
+	pasteInputs[2].type = INPUT_KEYBOARD;
+	pasteInputs[2].ki.wVk = 'V';
+	pasteInputs[2].ki.dwFlags = KEYEVENTF_KEYUP;
+	pasteInputs[2].ki.dwExtraInfo = 1;
+
+	pasteInputs[3].type = INPUT_KEYBOARD;
+	pasteInputs[3].ki.wVk = VK_CONTROL;
+	pasteInputs[3].ki.dwFlags = KEYEVENTF_KEYUP;
+	pasteInputs[3].ki.dwExtraInfo = 1;
+
+	SendInput(4, pasteInputs, sizeof(INPUT));
+	return true;
+}
+
 DWORD OpenKeyHelper::getVersionNumber() {
 	// get the filename of the executable containing the version resource
 	TCHAR szFilename[MAX_PATH + 1] = { 0 };
