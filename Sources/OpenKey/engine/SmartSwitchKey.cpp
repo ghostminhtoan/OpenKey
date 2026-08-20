@@ -53,6 +53,18 @@ void getSmartSwitchKeySaveData(vector<Byte>& outData) {
 
 #include <algorithm>
 
+bool isGameApp(string name) {
+    std::transform(name.begin(), name.end(), name.begin(), [](unsigned char ch) { return std::tolower(ch); });
+    static const vector<string> gameList = {
+        "league of legends.exe", "leagueclientux.exe", "leagueclient.exe", "valorant.exe", "valorant-win64-shipping.exe",
+        "csgo.exe", "cs2.exe", "dota2.exe", "gta5.exe", "overwatch.exe", "genshinimpact.exe", "starrail.exe"
+    };
+    for (size_t i = 0; i < gameList.size(); i++) {
+        if (name == gameList[i]) return true;
+    }
+    return false;
+}
+
 static bool isExcludedApp(string name) {
     std::transform(name.begin(), name.end(), name.begin(), [](unsigned char ch) { return std::tolower(ch); });
     static const vector<string> excludedList = {
