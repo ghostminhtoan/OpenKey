@@ -1895,11 +1895,14 @@ void vKeyHandleEvent(const vKeyEvent& event,
                              (data == VK_LCONTROL && (vMacroTriggerMask & 0x10)) ||
                              (data == VK_RCONTROL && (vMacroTriggerMask & 0x20));
 
+    bool isNumpadKey = (rawData >= 0x60 && rawData <= 0x69);
     bool isTBTOrCustomNumberAction = (vInputType == vTuBinhTranDonGian || vInputType == vTuDinhNghia) &&
-                                     IS_TBT_STANDALONE_KEY(data);
+                                     IS_TBT_STANDALONE_KEY(data) && !isNumpadKey;
     bool isTBTNumberBreak = false;
     if ((vInputType == vTuBinhTranDonGian) && IS_NUMBER_KEY(data)) {
-        if (data == KEY_0) {
+        if (isNumpadKey) {
+            isTBTNumberBreak = true;
+        } else if (data == KEY_0) {
             if (_index > 0 && restoreTBTStandaloneThenInsertRaw(data, _isCaps)) {
                 _justTypedNumber = (capsStatus != 1);
                 return;
