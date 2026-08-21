@@ -31,6 +31,11 @@ void getSmartSwitchKeySaveData(vector<Byte>& outData);
 int getAppInputMethodStatus(const string& bundleId, const int& currentInputMethod);
 
 /**
+ * Check if the application is a game
+ */
+bool isGameApp(string name);
+
+/**
  * Set default language for this @bundleId
  */
 void setAppInputMethodStatus(const string& bundleId, const int& language);

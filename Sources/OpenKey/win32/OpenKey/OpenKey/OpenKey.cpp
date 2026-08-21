@@ -196,10 +196,54 @@ static bool _willSendControlKey = false;
 static Uint16 _uniChar[2];
 static int _i, _j, _k;
 static Uint32 _tempChar;
-
 static string macroText, macroContent;
 static int _languageTemp = 0; //use for smart switch key
 static vector<Byte> savedSmartSwitchKeyData; ////use for smart switch key
+
+static bool isTypingContext(const string& exeName) {
+	HWND fg = GetForegroundWindow();
+	if (!fg) return false;
+	DWORD threadId = GetWindowThreadProcessId(fg, NULL);
+	GUITHREADINFO gti = { sizeof(GUITHREADINFO) };
+	if (GetGUIThreadInfo(threadId, &gti)) {
+		if (gti.hwndCaret && (gti.rcCaret.right > gti.rcCaret.left || gti.rcCaret.bottom > gti.rcCaret.top)) {
+			return true;
+		}
+		if (gti.hwndFocus && gti.hwndFocus != fg) {
+			TCHAR className[64] = { 0 };
+			if (GetClassName(gti.hwndFocus, className, 64)) {
+				if (_tcsicmp(className, _T("Edit")) == 0 || _tcsicmp(className, _T("RichEdit")) == 0 ||
+					_tcsnicmp(className, _T("RichEdit20"), 10) == 0 || _tcsnicmp(className, _T("RICHEDIT50"), 10) == 0) {
+					return true;
+				}
+			}
+		}
+	}
+	return false;
+}
+
+static bool _inGameChatTyping = false;
+
+static bool isGameTypingActive(const string& exeName, Uint16 vkCode, WPARAM wParam) {
+	if (!isGameApp(exeName)) return false;
+	if (isTypingContext(exeName)) {
+		_inGameChatTyping = true;
+		return true;
+	}
+	if (wParam == WM_KEYDOWN || wParam == WM_SYSKEYDOWN) {
+		if (vkCode == VK_RETURN) {
+			_inGameChatTyping = !_inGameChatTyping;
+			if (_inGameChatTyping) {
+				ShowCaretOverlay(true);
+			}
+			return _inGameChatTyping;
+		} else if (vkCode == VK_ESCAPE) {
+			_inGameChatTyping = false;
+			return false;
+		}
+	}
+	return _inGameChatTyping;
+}
 
 static bool _hasJustUsedHotKey = false;
 
@@ -984,8 +1028,13 @@ LRESULT CALLBACK keyboardHookProcess(int nCode, WPARAM wParam, LPARAM lParam) {
 		return CallNextHookEx(hKeyboardHook, nCode, wParam, lParam);
 	}
 
+	string& curExe = OpenKeyHelper::getLastAppExecuteName();
+	bool isGame = isGameApp(curExe);
+	bool isGameTyping = isGame ? isGameTypingActive(curExe, _keycode, wParam) : true;
+	int effectiveLanguage = (isGame && !isGameTyping) ? 0 : vLanguage;
+
 	//if is in english mode
-	if (vLanguage == 0) {
+	if (effectiveLanguage == 0) {
 		if (vUseMacro && vUseMacroInEnglishMode && ((wParam == WM_KEYDOWN || wParam == WM_SYSKEYDOWN) || isTriggerModifier)) {
 			vEnglishMode(((wParam == WM_KEYDOWN || wParam == WM_SYSKEYDOWN) ? vKeyEventState::KeyDown : (isTriggerModifier ? vKeyEventState::KeyUp : vKeyEventState::MouseDown)),
 				_keycode,
